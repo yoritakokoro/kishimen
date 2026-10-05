@@ -11,6 +11,7 @@ import numpy as np
 from PIL import Image
 
 import backgrounds
+import wafuu as wf
 from common import *  # noqa: F401,F403
 from common import _premul
 
@@ -70,7 +71,7 @@ def put(dst, name, x, y, height=None, scale=None, ang=0.0, opacity=1.0, flip=Fal
     return place(dst, name, ax, ay, x, y, scale, ang, opacity, flip)
 
 
-SILHOUETTE = np.float32([0.90, 0.36, 0.62])
+SILHOUETTE = np.float32([0.58, 0.51, 0.48])
 
 
 def put_reveal(dst, name, x, y, scale, opacity, color_u):
@@ -251,7 +252,7 @@ def title_logo(dst, cx=W / 2, cy=H * 0.47, st=0.8, opacity=1.0, glow=0.0, flip=F
     if glow > 0:
         g = blur(np.ascontiguousarray(lf[..., 3]), 10)
         gl = np.clip(g * 1.4, 0, 1)[..., None] * glow
-        dst[:] = screen(dst, gl * np.float32([1.0, 0.82, 0.92]))
+        dst[:] = screen(dst, gl * np.float32([1.0, 0.92, 0.86]))
     return over(dst, lf, opacity)
 
 
@@ -296,23 +297,23 @@ def heart_ribbon(dst, u, cx=W / 2, cy=H * 0.47, st=0.8, opacity=1.0, glow=0.0, t
     return over(dst, acc, opacity)
 
 
-SQ_SOFT = [
-    (0.30, 0.42, 0.62, 20, 6, (0.97, 0.62, 0.78), 0.45),
-    (0.72, 0.58, 0.55, -12, -5, (0.99, 0.74, 0.86), 0.45),
-    (0.55, 0.25, 0.40, 35, 9, (1.0, 0.88, 0.93), 0.5),
-    (0.15, 0.85, 0.45, 5, -7, (0.96, 0.56, 0.74), 0.35),
-    (0.90, 0.15, 0.38, 28, 8, (0.98, 0.68, 0.82), 0.4),
+BL_SOFT = [  # (cx, cy, diameter, angle0, deg/s, colour, alpha): large soft sakura in the Yoshino palette
+    (0.30, 0.42, 0.62, 20, 4, wf.YOS, 0.40),
+    (0.72, 0.58, 0.55, -12, -3, wf.SAKURA, 0.45),
+    (0.55, 0.25, 0.40, 35, 5, wf.IVORY, 0.60),
+    (0.15, 0.85, 0.45, 5, -4, wf.GREIGE_LIGHT, 0.50),
+    (0.90, 0.15, 0.38, 28, 4, wf.SAKURA, 0.40),
 ]
-SQ_VIVID = [
-    (0.25, 0.35, 0.70, 24, 14, (0.95, 0.38, 0.64), 0.55),
-    (0.78, 0.62, 0.66, -18, -12, (0.98, 0.55, 0.75), 0.6),
-    (0.58, 0.12, 0.45, 40, 18, (1.0, 0.82, 0.90), 0.55),
-    (0.10, 0.90, 0.50, 8, -16, (0.93, 0.32, 0.58), 0.5),
+BL_VIVID = [
+    (0.25, 0.35, 0.70, 24, 6, wf.SAKURA_DEEP, 0.30),
+    (0.78, 0.62, 0.66, -18, -5, wf.YOS, 0.55),
+    (0.58, 0.12, 0.45, 40, 7, wf.IVORY, 0.55),
+    (0.10, 0.90, 0.50, 8, -6, wf.SAKURA, 0.50),
 ]
 
 
 def soft_pink(rgb, k=0.25):
-    return screen(rgb, np.float32([1.0, 0.86, 0.92]), k)
+    return screen(rgb, np.float32([1.0, 0.95, 0.92]), k)
 
 
 # --------------------------------------------------------------------------- text
@@ -329,7 +330,7 @@ YOSHINO_DARK = (122, 108, 101)
 
 
 def tagline_layer(y=H * 0.605):
-    return text_layer(TAGLINE, FONT_ROUND_B, 15, W / 2, y, anchor="c", fill=(232, 110, 150), spacing=2,
+    return text_layer(TAGLINE, FONT_ROUND_B, 15, W / 2, y, anchor="c", fill=(140, 118, 110), spacing=2,
                       stroke=2, stroke_fill=(255, 255, 255))
 
 
@@ -343,12 +344,12 @@ CATCH_SIZE = 34
 def catch_layer():
     """Catch copy with ruby 神様 over 偶像, centred in the frame, plus per-glyph screen boxes."""
     im, pad, xs, widths = text_image(CATCH_MAIN, FONT_SERIF, CATCH_SIZE, fill=(255, 255, 255), stroke=4,
-                                     stroke_fill=(220, 80, 140), glow=8, glow_col=(255, 130, 186), glow_k=1.0)
+                                     stroke_fill=(150, 120, 112), glow=8, glow_col=(236, 176, 192), glow_k=1.0)
     i = CATCH_MAIN.index("偶像")
     gx = xs[i]
     gw = widths[i] + widths[i + 1]
     rim, rpad, _, rwid = text_image(CATCH_RUBY, FONT_SERIF, 17, fill=(255, 255, 255), stroke=2,
-                                    stroke_fill=(234, 108, 160), glow=4, glow_col=(255, 150, 196), spacing=3)
+                                    stroke_fill=(150, 120, 112), glow=4, glow_col=(236, 176, 192), spacing=3)
     tw = im.size[0] - 2 * pad
     x0 = W / 2 - tw / 2
     y0 = H / 2 - CATCH_SIZE * 0.7
@@ -417,7 +418,7 @@ def catch_sparkles(dst, t):
     for px, py, rad in dots:
         cv2.circle(m, (int(px * 16), int(py * 16)), max(1, int(rad * 16)), 255, -1, cv2.LINE_AA, 4)
     glow = cv2.GaussianBlur(m, (0, 0), 7).astype(np.float32) / 255.0
-    dst[:] = screen(dst, np.clip(glow * 2.2, 0, 1)[..., None] * np.float32([1.0, 0.62, 0.84]), 0.9)
+    dst[:] = screen(dst, np.clip(glow * 2.2, 0, 1)[..., None] * np.float32([1.0, 0.86, 0.58]), 0.9)
     fill_mask(dst, m, (1.0, 0.98, 0.92), 1.0)
     return dst
 
@@ -445,7 +446,7 @@ def catchcopy(dst, t):
     return dst
 
 
-NAME_SQ_COLS = [np.float32(YOSHINO_COLOR) / 255 * 0.92, np.float32([0.94, 0.52, 0.71])]
+NAME_SQ_COLS = [np.float32(YOSHINO_COLOR) / 255 * 0.92, wf.SAKURA_DEEP]
 
 
 def name_squares(dst, tau, xs, widths, side):
@@ -522,10 +523,10 @@ def credit_page(dst, idx, tau, out_u):
     y = H * 0.12
     k = 0
     for label, value in entries:
-        lab = text_layer(label, FONT_ROUND_B, 18, x, y, anchor=side, fill=(226, 84, 140), stroke=3,
+        lab = text_layer(label, FONT_ROUND_B, 18, x, y, anchor=side, fill=(140, 116, 108), stroke=3,
                          stroke_fill=(255, 255, 255), spacing=2)
         val = text_layer(value, FONT_ROUND_B, 30, x, y + 30, anchor=side, fill=(255, 255, 255), stroke=4,
-                         stroke_fill=(226, 92, 150), spacing=2, glow=4, glow_col=(255, 160, 200), glow_k=0.6)
+                         stroke_fill=(150, 120, 112), spacing=2, glow=4, glow_col=(236, 190, 200), glow_k=0.6)
         u_in = clamp01((tau - 0.15 - k * 0.18) / 0.7)
         op = ease_out(u_in) * (1 - out_u)
         text_on(dst, lab, opacity=op, scatter=u_in)
@@ -536,21 +537,21 @@ def credit_page(dst, idx, tau, out_u):
         u_in = clamp01((tau - 0.8) / 0.8)
         for j, line in enumerate(COPYRIGHT):
             c = text_layer(line, FONT_ROUND_B, 18, W * 0.94, H * 0.86 + j * 26, anchor="r", fill=(255, 255, 255),
-                           stroke=3, stroke_fill=(226, 92, 150), spacing=1)
+                           stroke=3, stroke_fill=(150, 120, 112), spacing=1)
             text_on(dst, c, opacity=ease_out(u_in) * (1 - out_u), scatter=u_in)
     return dst
 
 
 def starring_text(dst, t):
     x = W * 0.05
-    rows = [("STARRING", FONT_ROUND_B, 18, (236, 96, 150), 0, H * 0.79),
+    rows = [("STARRING", FONT_ROUND_B, 18, (140, 116, 108), 0, H * 0.79),
             ("『依田芳乃』", FONT_ROUND, 34, (255, 255, 255), 4, H * 0.79 + 26),
             ("CV.高田憂希", FONT_ROUND_B, 20, (255, 255, 255), 3, H * 0.79 + 76)]
     for k, (txt, fs, sz, col, st, y) in enumerate(rows):
         u = clamp01((t - 7.15 - k * 0.15) / 0.6)
         if u <= 0:
             continue
-        info = text_layer(txt, fs, sz, x, y, fill=col, stroke=max(st, 2), stroke_fill=(232, 96, 150) if st else (255, 255, 255),
+        info = text_layer(txt, fs, sz, x, y, fill=col, stroke=max(st, 2), stroke_fill=(150, 120, 112) if st else (255, 255, 255),
                           spacing=2)
         text_on(dst, info, opacity=ease_out(u) * (1 - seg(t, 10.0, 10.4)), scatter=u)
     return dst
@@ -561,7 +562,7 @@ def copyright_text(dst, t, t0):
     if u <= 0:
         return dst
     for j, line in enumerate(COPYRIGHT):
-        c = text_layer(line, FONT_ROUND_B, 14, W * 0.955, H * 0.895 + j * 20, anchor="r", fill=(236, 110, 160),
+        c = text_layer(line, FONT_ROUND_B, 14, W * 0.955, H * 0.895 + j * 20, anchor="r", fill=(140, 118, 110),
                        stroke=2, stroke_fill=(255, 255, 255), spacing=1)
         text_on(dst, c, opacity=ease_out(u), scatter=u)
     return dst
@@ -647,20 +648,28 @@ def _diag(ang):
 
 
 def slash_wipe(A, B, u, ang=-62, sk=None):
+    """Diagonal wipe whose edge is a bundle of mizuhiki cords."""
     c = _diag(ang)
     p = lerp(-0.12, 1.12, smooth(u))
-    mB = np.clip((p - c) / 0.015, 0, 1)[..., None]
+    mB = np.clip((p - c) / 0.012 + 0.5, 0, 1)[..., None]
     out = A * (1 - mB) + B * mB
-    band = np.exp(-((c - p) / 0.06) ** 2)[..., None]
-    out = out * (1 - band * 0.85) + band * 0.85 * np.float32([1.0, 0.92, 0.96])
-    if sk is not None:
-        over(out, to_f(sk) * band, 1.0)
+    glow = np.exp(-((c - p) / 0.035) ** 2)[..., None]
+    out = out * (1 - glow * 0.45) + wf.IVORY * glow * 0.45
+    a = math.radians(ang)
+    ca, sa = math.cos(a), math.sin(a)
+    corners = [x * ca + y * sa for x in (0, W) for y in (0, H)]
+    K = min(corners) + p * (max(corners) - min(corners))
+    px, py = K * ca, K * sa
+    wf.cord_band(out, (px + sa * 1500, py - ca * 1500), (px - sa * 1500, py + ca * 1500), wave=9, phase=u * 5,
+                 width=12, n=120)
     return out
 
 
 def transition(A, B, u, kind):
     if kind == "fade":
         return mix(A, B, smooth(u))
+    if kind == "sakura":
+        return wf.sakura_cover(A, B, u)
     if kind == "white":
         w = (1 - abs(2 * u - 1)) ** 0.6
         return to_white(mix(A, B, smooth(u)), w)
@@ -760,24 +769,24 @@ def _sparkles(fr, t):
 
 MONTAGE = [
     Shot(44.6, kb("card9", fzo("card9", 1.25, 60, 20), fzo("card9", 1.38, -40, 0), 44.6, 47.5)),
-    Shot(47.45, kb("card1", fz("card1", 1.45), fzo("card1", 1.6, -10, -15), 47.45, 49.7), "white", 0.5),
+    Shot(47.45, kb("card1", fz("card1", 1.45), fzo("card1", 1.6, -10, -15), 47.45, 49.7), "sakura", 0.5),
     Shot(49.65, kb("card7", fz("card7", 1.9), fzo("card7", 2.05, -10, -10), 49.65, 51.4,
                    adj=lambda u: dict(bright=0.12 * (1 - u), warm=0.06 * (1 - u))), "fade", 0.3),
     Shot(51.35, kb("card21", fzo("card21", 1.3, 0, 90), fzo("card21", 1.38, 10, 80), 51.35, 52.3), "fade", 0.25),
     Shot(52.2, kb("card21", fz("card21", 2.0), fzo("card21", 2.1, 10, -8), 52.2, 53.0), "fade", 0.25),
     Shot(53.0, kb("card11", fzo("card11", 1.25, 0, 30), fz("card11", 1.9), 53.0, 54.1), "fade", 0.12),
     Shot(54.45, kb("card11", fzo("card11", 2.1, 30, -20), fzo("card11", 2.2, 30, -20), 54.45, 54.95, extra=_drop),
-         "white", 0.35),
+         "sakura", 0.5),
     Shot(54.95, kb("card11", fzo("card11", 3.2, 0, 70), fzo("card11", 3.4, 0, 70), 54.95, 55.5, wash_k=0.55), "fade", 0.12),
     Shot(55.7, kb("card18", fzo("card18", 1.55, 20, 0), fzo("card18", 1.7, 0, -20), 55.7, 58.25, extra=_notes18),
-         "white", 0.4),
-    Shot(58.75, kb("card8", fzo("card8", 1.35, -30, 80), fzo("card8", 1.5, 40, -20), 58.75, 60.25), "white", 0.6),
+         "sakura", 0.5),
+    Shot(58.75, kb("card8", fzo("card8", 1.35, -30, 80), fzo("card8", 1.5, 40, -20), 58.75, 60.25), "sakura", 0.5),
     Shot(60.2, kb("card4", fz("card4", 1.75), fzo("card4", 1.9, 0, -10), 60.2, 62.05, extra=_sparkles), "fade", 0.25),
     Shot(62.0, kb("card15", fz("card15", 2.1), fz("card15", 2.2), 62.0, 62.7, wash_k=0.75, sk=0.6), "fade", 0.15),
     Shot(62.65, kb("card15", fz("card15", 1.75), fzo("card15", 1.82, -10, -5), 62.65, 63.5), "fade", 0.15),
-    Shot(63.6, kb("card15", fzo("card15", 1.45, -60, 40), fzo("card15", 1.55, -80, 20), 63.6, 65.3), "white", 0.3),
+    Shot(63.6, kb("card15", fzo("card15", 1.45, -60, 40), fzo("card15", 1.55, -80, 20), 63.6, 65.3), "sakura", 0.5),
     Shot(65.25, kb("card10", fzo("card10", 1.15, 0, 40), fzo("card10", 1.2, 0, 40), 65.25, 66.6,
-                   wash_k=lambda u: 0.9 - 0.4 * u, sk=0.7), "white", 0.5),
+                   wash_k=lambda u: 0.9 - 0.4 * u, sk=0.7), "sakura", 0.5),
     Shot(66.5, kb("card10", fzo("card10", 1.18, 0, 50), fzo("card10", 1.22, 0, 50), 66.5, 67.25), "fade", 0.35),
     Shot(67.2, kb("card10", fz("card10", 2.2), fzo("card10", 2.3, 0, -5), 67.2, 68.0)),
     Shot(67.95, kb("card5", fzo("card5", 1.3, 0, -20), fzo("card5", 1.3, 0, -20), 67.95, 68.25), "fade", 0.3),
@@ -877,11 +886,11 @@ def sketch_tinted(dst, name, fx, fy, dx, dy, scale, ang, color, opacity, reveal=
 # opening line-art: one sketch per half beat, each replacing the previous
 # (asset, face x, face y as frame fraction, scale, angle from -> to, drift dx, dy, colour, start)
 OPEN_SKETCHES = [
-    ("ysn3", 0.42, 0.45, 0.51, -6, -2, 60, -14, (0.84, 0.30, 0.78), 0.894),
-    ("Yoshino SSR4", 0.62, 0.40, 1.5, 5, 2, -70, 8, (0.95, 0.40, 0.66), 1.120),
-    ("ysn2", 0.38, 0.50, 0.52, -9, -5, 50, -24, (0.70, 0.42, 0.90), 1.347),
-    ("ysn5", 0.60, 0.42, 0.56, 4, 1, -60, -10, (0.90, 0.34, 0.72), 1.603),
-    ("ysn1", 0.45, 0.46, 0.55, -4, 0, 40, 10, (0.86, 0.38, 0.80), 1.858),
+    ("ysn3", 0.42, 0.45, 0.51, -6, -2, 60, -14, (0.86, 0.42, 0.58), 0.894),
+    ("Yoshino SSR4", 0.62, 0.40, 1.5, 5, 2, -70, 8, (0.90, 0.50, 0.62), 1.120),
+    ("ysn2", 0.38, 0.50, 0.52, -9, -5, 50, -24, (0.78, 0.44, 0.58), 1.347),
+    ("ysn5", 0.60, 0.42, 0.56, 4, 1, -60, -10, (0.88, 0.46, 0.60), 1.603),
+    ("ysn1", 0.45, 0.46, 0.55, -4, 0, 40, 10, (0.84, 0.40, 0.56), 1.858),
 ]
 OPEN_END = 2.6
 
@@ -936,7 +945,7 @@ def seg_brand(t):
     # white then soft squares (3.15-4.0)
     fr = to_white(fr, smooth(seg(t, 3.1, 3.3)))
     if t > 3.3:
-        squares(fr, t, SQ_SOFT, grow=lerp(0.7, 1.0, smooth(seg(t, 3.3, 4.0))), opacity=smooth(seg(t, 3.3, 3.9)))
+        wf.blossom_field(fr, t, BL_SOFT, grow=lerp(0.7, 1.0, smooth(seg(t, 3.3, 4.0))), opacity=smooth(seg(t, 3.3, 3.9)))
     # Yoshino 1 (4.0 - 5.0): cut-out at upper left, face clear of the logo
     if 3.95 < t < 5.1:
         u = ease_out(seg(t, 3.95, 4.3))
@@ -946,8 +955,8 @@ def seg_brand(t):
         fr = mix(fr, cl, smooth(seg(t, 3.95, 4.15)) * (1 - smooth(seg(t, 4.9, 5.05))))
     # vivid squares (5.0 - 6.0)
     if t > 4.85:
-        base = full(0, (0.99, 0.78, 0.87))
-        squares(base, t, SQ_VIVID, grow=lerp(0.8, 1.2, seg(t, 4.85, 6.6)))
+        base = full(0, (0.92, 0.89, 0.87))
+        wf.blossom_field(base, t, BL_VIVID, grow=lerp(0.8, 1.2, seg(t, 4.85, 6.6)))
         fr = mix(fr, base, smooth(seg(t, 4.85, 5.05)))
     # Yoshino 2 (6.0 - 6.6): cut-out at upper right
     if t > 5.9:
@@ -965,12 +974,18 @@ def seg_brand(t):
 
 
 def seg_starring(t):
-    base = full(0, (0.99, 0.80, 0.88))
-    squares(base, t, SQ_VIVID, grow=1.1)
-    squares(base, t * 0.7, SQ_SOFT, grow=1.3, opacity=0.7)
+    base = full(0, (0.94, 0.915, 0.895))
+    xn, yn = xy_norm()
+    wf.seigaiha(base, np.clip((yn - 0.55) / 0.45, 0, 1), wf.IVORY, 0.55)
+    wf.blossom_field(base, t, BL_VIVID, grow=1.1)
+    wf.blossom_field(base, t * 0.7, BL_SOFT, grow=1.3, opacity=0.7)
     for name, x, y, sc, t0 in (("tachie4", 240, 250, 1.7, 6.85), ("ysn5", 585, 395, 0.32, 7.15),
                                ("tachie3", 830, 560, 1.4, 7.0)):
         put(base, name, x, y, scale=sc, opacity=smooth(seg(t, t0, t0 + 0.45)))
+    k = ease_out(seg(t, 7.05, 7.6))
+    if k > 0.01:
+        wf.cord_band(base, (W * 0.05, H * 0.78), (W * 0.05 + 300 * k, H * 0.78), wave=3, width=5, n=40,
+                     opacity=1 - smooth(seg(t, 10.0, 10.4)))
     starring_text(base, t)
     base = to_white(base, smooth(seg(t, 10.0, 10.45)))
     return base
@@ -1011,7 +1026,7 @@ def seg_shrine(t):
                 return fr
     fr = shrine(t, 1.08, 1.13, 13.0, 14.0)
     fr = mix(cover("card2", face("card2")[0], face("card2")[1] + 20, 2.5), fr, smooth(seg(t, 13.0, 13.12)))
-    fr = to_white(fr, smooth(seg(t, 13.3, 14.0)), (1.0, 0.92, 0.95))
+    fr = to_white(fr, smooth(seg(t, 13.3, 14.0)), (0.975, 0.958, 0.940))
     return fr
 
 
@@ -1025,7 +1040,7 @@ def seg_group(t):
     if t < 15.7:
         k = 1 - smooth(seg(t, 14.9, 15.7))
         fr = wash(blur(fr, 6 * k), 0.95 * k)
-        fr = to_white(fr, 0.55 * k * (1 - seg(t, 14.0, 15.0) * 0.3), (1.0, 0.92, 0.95))
+        fr = to_white(fr, 0.55 * k * (1 - seg(t, 14.0, 15.0) * 0.3), (0.975, 0.958, 0.940))
     petals(fr, t, n=45, seed=6, opacity=smooth(seg(t, 15.0, 15.6)))
     # heart ribbon draw-on
     if 17.0 <= t < 18.45:
@@ -1041,7 +1056,7 @@ def seg_group(t):
     if t > 19.2:
         k = smooth(seg(t, 19.2, 19.8))
         bgp = wash(blur(group_frame(t, z), 14), 0.9)
-        bgp = to_white(bgp, 0.3 + 0.4 * seg(t, 19.6, 20.0), (1.0, 0.93, 0.96))
+        bgp = to_white(bgp, 0.3 + 0.4 * seg(t, 19.6, 20.0), (0.975, 0.958, 0.940))
         title_logo(bgp, st=0.84, glow=0.25)
         fr = mix(fr, bgp, k)
     return fr
@@ -1051,10 +1066,10 @@ def seg_title(t):
     fr = checker_at(t, 2.4)
     sq = smooth(seg(t, 22.8, 24.0))
     if sq > 0:
-        squares(fr, t, SQ_SOFT, grow=lerp(0.5, 1.25, seg(t, 22.8, 26.0)), opacity=sq)
-        squares(fr, t * 0.8, SQ_VIVID[:2], grow=lerp(0.4, 1.0, seg(t, 23.0, 26.0)), opacity=sq * 0.6)
+        wf.blossom_field(fr, t, BL_SOFT, grow=lerp(0.5, 1.25, seg(t, 22.8, 26.0)), opacity=sq)
+        wf.blossom_field(fr, t * 0.8, BL_VIVID[:2], grow=lerp(0.4, 1.0, seg(t, 23.0, 26.0)), opacity=sq * 0.6)
     if t < 20.13:
-        fr = to_white(fr, 0.5, (1.0, 0.93, 0.96))
+        fr = to_white(fr, 0.5, (0.975, 0.958, 0.940))
         title_logo(fr, st=0.84, opacity=0.8, flip=True, glow=0.3)
     elif t < 20.75:
         u = seg(t, 20.13, 20.75)
@@ -1063,6 +1078,10 @@ def seg_title(t):
                    mono=0.6 * (1 - u))
     else:
         title_logo(fr, st=0.82 - 0.02 * seg(t, 20.75, 26.0))
+    if t >= 20.75:
+        kk = ease_out(seg(t, 20.75, 21.7))
+        wf.knot(fr, 112, 600, 92, kk, ang=-10)
+        wf.knot(fr, 912, 150, 72, kk, ang=12)
     copyright_text(fr, t, 21.95)
     fr = to_white(fr, smooth(seg(t, 25.9, 26.5)))
     return fr
@@ -1114,8 +1133,8 @@ def intro_frame(k, t):
             field = np.clip(1.15 - xn / 0.48, 0, 1) * ht
         else:
             field = np.clip(1.15 - (1 - xn) / 0.48, 0, 1) * ht
-        halftone(fr, field, (1.0, 1.0, 1.0), 0.55, cell=22)
-        halftone(fr, np.clip((yn - 0.72) / 0.28, 0, 1) * ht, (0.98, 0.62, 0.78), 0.5, cell=16, ang=30, square=False)
+        wf.seigaiha(fr, field, wf.IVORY, 0.75)
+        wf.seigaiha(fr, np.clip((yn - 0.72) / 0.28, 0, 1) * ht, wf.YOS, 0.6, R=26)
     entry = nearest_beat(start + 1.45, 0.25) - start
     tu = ease_out(clamp01((tau - entry) / 0.45))
     if tu > 0:
@@ -1157,22 +1176,12 @@ def seg_montage(t):
                           max(W / 1280, H / 824) * 1.25)
         return slash_wipe(prev, cur, seg(t, INTRO_END, INTRO_END + 0.38), ang=-62, sk=sk)
     fr = run_shots(MONTAGE, t)
-    # white flashes between beats
-    fr = to_white(fr, pulse(t, 54.0, 54.3, 54.5))
-    fr = to_white(fr, pulse(t, 55.4, 55.6, 55.9))
+    # soft ivory flashes between beats, and a burst of blossoms
+    fr = wf.ivory_wash(fr, pulse(t, 54.0, 54.3, 54.5) * 0.85)
+    fr = wf.ivory_wash(fr, pulse(t, 55.4, 55.6, 55.9) * 0.85)
     if 58.1 < t < 58.9:
-        u = seg(t, 58.15, 58.8)
-        fr = to_white(fr, pulse(t, 58.1, 58.3, 58.85))
-        for k, (col, ang0) in enumerate((((0.95, 0.3, 0.75), 0.3), ((1.0, 0.82, 0.2), 2.4), ((0.98, 0.5, 0.2), 4.2))):
-            r = 60 + 520 * ease_out(u)
-            x = W / 2 + math.cos(ang0) * r * 0.9
-            y = H / 2 + math.sin(ang0) * r * 0.6
-            m = np.zeros((H, W), np.uint8)
-            cv2.ellipse(m, (int(x), int(y)), (int(90 + 140 * u), int(40 + 60 * u)), math.degrees(ang0), 0, 360, 255, -1,
-                        cv2.LINE_AA)
-            m = cv2.GaussianBlur(m, (0, 0), 6)
-            fill_mask(fr, m, col, 0.8 * (1 - u))
-        petals(fr, t, n=60, seed=9, scale=2.0, burst=(0.5, 0.5, ease_out(u)), opacity=1 - u)
+        fr = wf.ivory_wash(fr, pulse(t, 58.1, 58.3, 58.85) * 0.85)
+        wf.blossom_burst(fr, seg(t, 58.15, 58.85))
     if 70.95 < t < 71.15:
         fr = zoom_blur(fr, 0.3 * pulse(t, 70.95, 71.1, 71.15))
     fr = to_white(fr, smooth(seg(t, 79.5, 79.85)))
@@ -1209,12 +1218,16 @@ def credit_bg(i, t):
     cx, cy = face_at(name, zz, tx + lerp(-60, 60, u), H * 0.45)
     fr = cover(name, cx, cy, zz)
     fr = wash(fr, 0.62)
-    fr = to_white(fr, 0.18, (1.0, 0.9, 0.95))
-    xn, yn = xy_norm()
-    specs = [(0.18 if side == "l" else 0.82, 0.38, 0.75, 18, 3, (0.95, 0.42, 0.66), 0.42),
-             (0.10 if side == "l" else 0.90, 0.85, 0.5, -10, -4, (1.0, 0.78, 0.88), 0.5),
-             (0.6, -0.05, 0.5, 30, 5, (0.98, 0.6, 0.78), 0.3)]
-    squares(fr, t - t0, specs)
+    fr = to_white(fr, 0.18, (0.975, 0.958, 0.940))
+    specs = [(0.18 if side == "l" else 0.82, 0.38, 0.75, 18, 3, wf.YOS, 0.42),
+             (0.10 if side == "l" else 0.90, 0.85, 0.5, -10, -4, wf.SAKURA, 0.5),
+             (0.6, -0.05, 0.5, 30, 5, wf.IVORY, 0.4)]
+    wf.blossom_field(fr, t - t0, specs)
+    k = ease_out(seg(t, t0 + 0.1, t0 + 0.8))
+    x0 = W * 0.06 if side == "l" else W * 0.94
+    x1 = x0 + (1 if side == "l" else -1) * 330 * k
+    if k > 0.01:
+        wf.cord_band(fr, (x0, H * 0.085), (x1, H * 0.085), wave=3, width=5, n=40)
     return fr
 
 
@@ -1248,7 +1261,7 @@ def seg_finale(t):
     if t < 101.0:
         g = lerp(0.03, 0.42, smooth(seg(t, 100.15, 100.7)))
         fr = full(0, (g, g * 0.94, g * 0.97))
-        fr = to_white(fr, smooth(seg(t, 100.7, 101.0)) * 0.9, (1.0, 0.93, 0.96))
+        fr = to_white(fr, smooth(seg(t, 100.7, 101.0)) * 0.9, (0.975, 0.958, 0.940))
         hit = pulse(t, 100.0, 100.08, 100.3)
         title_logo(fr, st=lerp(1.1, 0.84, ease_out(seg(t, 100.0, 100.35))), mono=0.85 * (1 - seg(t, 100.6, 101.0)),
                    bright=0.2 * (1 - seg(t, 100.5, 101.0)), glow=1.2 - 0.8 * seg(t, 100.5, 101.0))
@@ -1266,7 +1279,11 @@ def seg_finale(t):
         title_logo(fr, st=lerp(0.9, 0.84, ease_out(u)), opacity=0.3 + 0.7 * smooth(seg(t, 102.2, 102.5)),
                    mono=0.6 * (1 - u))
     else:
-        title_logo(fr, st=0.84 - 0.02 * seg(t, 102.5, 107.0), opacity=1 - smooth(seg(t, 106.9, 107.75)))
+        op = 1 - smooth(seg(t, 106.9, 107.75))
+        title_logo(fr, st=0.84 - 0.02 * seg(t, 102.5, 107.0), opacity=op)
+        kk = ease_out(seg(t, 102.5, 103.4))
+        wf.knot(fr, 112, 600, 92, kk, ang=-10, opacity=op)
+        wf.knot(fr, 912, 150, 72, kk, ang=12, opacity=op)
     return fr
 
 
@@ -1282,7 +1299,7 @@ def seg_end(t):
 
 FAN = (6.33, 6.79)
 FAN_BAND = 28.0  # degrees of pink ribs behind the leading edge
-FAN_RIBS = (np.float32([1.0, 0.74, 0.86]), np.float32([0.96, 0.56, 0.75]))
+FAN_RIBS = (wf.IVORY, wf.YOS)
 
 
 def fan_wipe(A, B, u):
@@ -1300,8 +1317,8 @@ def fan_wipe(A, B, u):
     r = np.sqrt((xn * W - cx) ** 2 + (yn * H - cy) ** 2)[..., None]
     pink = pink + (1 - pink) * np.clip((r - 300) / 900, 0, 1) * 0.35  # paler towards the outer edge
     out = A * wA + B * wB + pink * wP
-    edge = np.exp(-(d / 0.9) ** 2)[..., None]
-    return to_white_arr(out, edge * 0.7)
+    edge = np.exp(-(d / 0.9) ** 2)[..., None]  # gold rim on the leading rib, like a sensu edge
+    return out * (1 - edge * 0.8) + wf.GOLD * edge * 0.8
 
 
 def to_white_arr(rgb, k):
@@ -1347,7 +1364,7 @@ def grade(fr, g=1.0):
     out = 0.5 + (out - 0.5) * 1.06
     out = np.clip(out, 0, 1) ** 0.88
     out = out * 0.95 + 0.05
-    out = out * np.float32([1.0, 0.965, 0.975]) + np.float32([0.025, 0.0, 0.012])
+    out = out * np.float32([1.0, 0.985, 0.97]) + np.float32([0.015, 0.008, 0.0])  # warm ivory (Yoshino) cast
     return mix(fr, np.clip(out, 0, 1), g)
 
 
