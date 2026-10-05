@@ -40,13 +40,15 @@ CARD_FACE = {
     "card6": (690, 370), "card7": (530, 380), "card8": (330, 450), "card9": (590, 410), "card10": (690, 330),
     "card11": (580, 490), "card12": (600, 560), "card13": (590, 370), "card15": (670, 380), "card16": (580, 390),
     "card17": (720, 370), "card18": (440, 430), "card19": (430, 470), "card20": (580, 340), "card21": (600, 310),
-    "card22": (630, 350), "card23": (890, 370),
+    "card22": (630, 350), "card23": (890, 370), "card24": (565, 390), "card25": (505, 345),
     "Yoshino SSR1": (650, 370), "Yoshino SSR2": (680, 420), "Yoshino SSR3": (620, 365), "Yoshino SSR4": (630, 330),
     "Yoshino SSR5": (360, 320),
 }
 CUT_FACE = {  # fraction of image size
     "tachie1": (0.54, 0.29), "tachie2": (0.476, 0.318), "tachie3": (0.427, 0.286), "tachie4": (0.52, 0.30),
     "tachie5": (0.367, 0.266), "tachie8": (0.416, 0.30), "tachie9": (0.47, 0.32),
+    "tachie10": (0.52, 0.31), "tachie11": (0.65, 0.30), "tachie12": (0.39, 0.36), "tachie13": (0.50, 0.29),
+    "tachie14": (0.60, 0.30),
     "ysn1": (0.49, 0.353), "ysn2": (0.51, 0.155), "ysn3": (0.568, 0.256), "ysn4": (0.495, 0.26), "ysn5": (0.488, 0.209),
     "ysn6": (0.423, 0.297),
 }
@@ -869,7 +871,7 @@ MONTAGE = [
     Shot(60.2, kb("card4", fz("card4", 1.75), fzo("card4", 1.9, 0, -10), 60.2, 62.05, extra=_sparkles), "fade", 0.25),
     Shot(62.0, kb("card15", fz("card15", 2.1), fz("card15", 2.2), 62.0, 62.7), "fade", 0.15),
     Shot(62.65, kb("card15", fz("card15", 1.75), fzo("card15", 1.82, -10, -5), 62.65, 63.5), "fade", 0.15),
-    Shot(63.6, kb("Yoshino SSR2", fzo("Yoshino SSR2", 1.3, 0, 40), fz("Yoshino SSR2", 1.45), 63.6, 65.3), "white", 0.3),
+    Shot(63.6, kb("card24", fzo("card24", 1.3, 0, 40), fz("card24", 1.45), 63.6, 65.3), "white", 0.3),
     Shot(65.25, kb("card10", (690, 280, 1.5), (690, 545, 1.5), 65.25, 67.2,  # top-to-bottom reveal, feathers rising
                    wash_k=lambda u: 0.8 * (1 - smooth(clamp01(u * 2.5))), extra=_feathers), "white", 0.5, no_punch=True),
     Shot(67.2, kb("card10", fz("card10", 2.2), fzo("card10", 2.3, 0, -5), 67.2, 68.0)),
@@ -880,7 +882,7 @@ MONTAGE = [
     Shot(70.6, kb("card5", fzo("card5", 1.5, 0, -20), fzo("card5", 1.55, 0, -20), 70.6, 71.15), "fade", 0.2),
     Shot(71.1, kb("card12", fzo("card12", 1.5, 40, -40), fzo("card12", 1.6, 30, -40), 71.1, 72.85, extra=_notes12),
          "blur", 0.35),
-    Shot(72.85, kb("card16", fzo("card16", 1.6, 0, 20), fzo("card16", 1.72, -10, 10), 72.85, 74.6), "blur", 0.35),
+    Shot(72.85, kb("card25", fzo("card25", 1.6, 0, 20), fzo("card25", 1.72, -10, 10), 72.85, 74.6), "blur", 0.35),
     Shot(74.5, kb("card2", fzo("card2", 1.45, 0, 30), fz("card2", 1.6), 74.5, 76.25), "wipe", 0.35),
     Shot(76.2, kb("card2", fz("card2", 2.4), fzo("card2", 2.5, 0, -6), 76.2, 76.75), "fade", 0.2),
     Shot(76.72, kb("card17", fz("card17", 2.3), fzo("card17", 2.6, 10, 0), 76.72, 76.97)),
@@ -992,8 +994,8 @@ def sketch_tinted(dst, name, fx, fy, dx, dy, scale, ang, color, opacity, reveal=
 OPEN_SKETCHES = [
     ("ysn3", 0.42, 0.45, 0.51, -6, -2, 60, -14, (0.84, 0.30, 0.78), 0.894),
     ("Yoshino SSR4", 0.62, 0.40, 1.5, 5, 2, -70, 8, (0.95, 0.40, 0.66), 1.120),
-    ("ysn2", 0.38, 0.50, 0.52, -9, -5, 50, -24, (0.70, 0.42, 0.90), 1.347),
-    ("ysn5", 0.60, 0.42, 0.56, 4, 1, -60, -10, (0.90, 0.34, 0.72), 1.603),
+    ("tachie12", 0.42, 0.48, 2.4, -9, -5, 50, -24, (0.70, 0.42, 0.90), 1.347),
+    ("tachie14", 0.58, 0.44, 2.3, 4, 1, -60, -10, (0.90, 0.34, 0.72), 1.603),
     ("ysn1", 0.45, 0.46, 0.55, -4, 0, 40, 10, (0.86, 0.38, 0.80), 1.858),
 ]
 OPEN_END = 2.6
@@ -1078,8 +1080,8 @@ def seg_starring(t):
     base = full(0, (0.99, 0.80, 0.88))
     squares(base, t, SQ_VIVID, grow=1.1)
     squares(base, t * 0.7, SQ_SOFT, grow=1.3, opacity=0.7)
-    for name, x, y, sc, t0 in (("tachie4", 240, 250, 1.7, 6.85), ("ysn5", 600, 360, 0.42, 7.9),
-                               ("tachie3", 845, 520, 1.85, 7.26)):
+    for name, x, y, sc, t0 in (("tachie13", 230, 230, 1.75, 6.85), ("tachie10", 560, 330, 1.9, 7.9),
+                               ("tachie11", 840, 470, 1.95, 7.26)):
         put(base, name, x, y, scale=sc, opacity=smooth(seg(t, t0, t0 + 0.9)))
     starring_text(base, t)
     base = to_white(base, smooth(seg(t, 10.0, 10.45)))
