@@ -170,7 +170,7 @@ def prepare():
                     ("action", compose_action)):
         if not (BUILD / f"{key}.npy").exists():
             register(key, fn())
-    for name in ("ysn3", "ysn5", "card10", "card15", "card13", "Yoshino SSR1", "Yoshino SSR2", "Yoshino SSR3",
+    for name in ("ysn3", "ysn2", "ysn5", "card10", "card15", "card13", "Yoshino SSR1", "Yoshino SSR2", "Yoshino SSR3",
                  "Yoshino SSR4", "Yoshino SSR5", "card9", "group"):
         sketch(name)
 
@@ -678,7 +678,28 @@ def add_punch_ins(shots, end):
     return out
 
 
-MONTAGE = add_punch_ins(MONTAGE, 78.72)
+def nearest_beat(t, tol=0.2):
+    i = int(np.argmin(np.abs(BEAT_T - t)))
+    return float(BEAT_T[i]) if abs(BEAT_T[i] - t) <= tol else t
+
+
+EIGHTHS = np.sort(np.concatenate([BEAT_T, (BEAT_T[:-1] + BEAT_T[1:]) / 2]))
+
+
+def snap_cuts(shots, end):
+    """Snap cut points to the beat grid; fast cuts (< 0.45 s) use the half-beat grid. Order is kept."""
+    orig = [sh.t0 for sh in shots]
+    for i in range(1, len(shots)):
+        gap = min(orig[i] - orig[i - 1], (orig[i + 1] if i + 1 < len(orig) else end) - orig[i])
+        grid, tol = (EIGHTHS, 0.12) if gap < 0.45 else (BEAT_T, 0.2)
+        j = int(np.argmin(np.abs(grid - orig[i])))
+        cand = float(grid[j]) if abs(grid[j] - orig[i]) <= tol else orig[i]
+        if cand > shots[i - 1].t0 + 0.15:
+            shots[i].t0 = cand
+    return shots
+
+
+MONTAGE = add_punch_ins(snap_cuts(MONTAGE, 78.72), 78.72)
 
 
 def action_shot(t):
@@ -696,19 +717,56 @@ MONTAGE.append(Shot(78.72, action_shot, "blur", 0.25))
 # --------------------------------------------------------------------------- segments
 
 
+def sketch_tinted(dst, name, fx, fy, dx, dy, scale, ang, color, opacity, reveal=None):
+    """Pink line-art of an asset, recoloured, optionally revealed outward from (dx, dy)."""
+    if opacity <= 0.001:
+        return dst
+    lay = to_f(sketch_layer(name, fx, fy, dx, dy, scale, ang))
+    a = lay[..., 3:4]
+    if reveal is not None:
+        xn, yn = xy_norm()
+        d = np.sqrt((xn * W - dx) ** 2 + (yn * H - dy) ** 2)
+        a = a * np.clip((reveal - d) / 60.0, 0, 1)[..., None]
+    col = np.concatenate([a * np.float32(color), a], -1)
+    return over(dst, col, opacity)
+
+
+# opening line-art layers: (asset, screen x, y, scale, angle0, angle1, drift dx, dy, colour, start beat)
+OPEN_SKETCHES = [  # scale: absolute for cut-outs, relative to cover size for card art
+    ("ysn3", 0.40, 0.46, 0.51, -7, -3, 70, -20, (0.84, 0.30, 0.78), 0.894),
+    ("Yoshino SSR4", 0.73, 0.36, 1.55, 6, 3, -60, 10, (0.95, 0.40, 0.66), 1.347),
+    ("ysn2", 0.36, 0.52, 0.52, -10, -6, 50, -30, (0.70, 0.42, 0.90), 1.858),
+]
+
+
 def seg_opening(t):
     if t < 0.35:
         return full(0.0)
-    if t < 1.0:
-        u = seg(t, 0.35, 1.0)
+    if t < 0.95:
+        u = seg(t, 0.35, 0.95)
         return full(smooth(u) ** 1.4)
     fr = to_white(checker().copy(), 0.45)
-    u = seg(t, 1.0, 2.5)
-    w, h = size_of("ysn3")
-    fx, fy = face("ysn3")
-    s = 1.55 + 0.12 * u
-    lay = sketch_layer("ysn3", fx + lerp(-70, 40, u), fy + 30, W / 2, H / 2, s, lerp(-4, -1, u))
-    over(fr, lay, smooth(seg(t, 1.0, 1.4)))
+    n = len(OPEN_SKETCHES)
+    for i, (name, x, y, sc, a0, a1, ddx, ddy, col, tb) in enumerate(OPEN_SKETCHES):
+        if t < tb:
+            continue
+        u = seg(t, tb, 2.6)
+        fx, fy = face(name)
+        if name in CARD_FACE:
+            w, h = size_of(name)
+            s = max(W / w, H / h) * sc
+        else:
+            s = sc
+        dx = x * W + ddx * ease_out(u)
+        dy = y * H + ddy * ease_out(u)
+        # later layers push the earlier ones back
+        later = [ob[-1] for ob in OPEN_SKETCHES[i + 1:] if t >= ob[-1]]
+        dim = 0.32 ** len(later)
+        rv = lerp(0, 1400, ease_out(seg(t, tb, tb + 0.35)))
+        op = smooth(seg(t, tb, tb + 0.12)) * dim
+        sketch_tinted(fr, name, fx, fy, dx, dy, s * (1 + 0.05 * u), lerp(a0, a1, u), col, op, reveal=rv)
+    # clear on the beat where the logo arrives
+    fr = to_white(fr, pulse(t, 2.15, 2.27, 2.5) * 0.85)
     return fr
 
 
@@ -920,7 +978,8 @@ def intro_frame(k, t):
             field = np.clip(1.15 - (1 - xn) / 0.48, 0, 1) * ht
         halftone(fr, field, (1.0, 1.0, 1.0), 0.55, cell=22)
         halftone(fr, np.clip((yn - 0.72) / 0.28, 0, 1) * ht, (0.98, 0.62, 0.78), 0.5, cell=16, ang=30, square=False)
-    tu = ease_out(clamp01((tau - 1.45) / 0.45))
+    entry = nearest_beat(start + 1.45, 0.25) - start
+    tu = ease_out(clamp01((tau - entry) / 0.45))
     if tu > 0:
         tx = W * 0.20 if side == "l" else W * 0.80
         off = (1 - tu) * (-160 if side == "l" else 160)
@@ -929,7 +988,7 @@ def intro_frame(k, t):
         place(fr, tachie, fx, 0, tx + off, 6, 0.98, 0, tu)
         if tu < 1:
             place(fr, tachie, fx, 0, tx + off * 2.2, 6, 0.98, 0, (1 - tu) * 0.35)
-    name_plate(fr, tau - 1.6, "r" if side == "l" else "l")
+    name_plate(fr, tau - entry - 0.15, "r" if side == "l" else "l")
     if k == 0:
         fr = to_white(fr, 1 - smooth(seg(t, 26.5, 27.05)))
     return fr
@@ -1090,6 +1149,27 @@ SEGMENTS = [
 ]
 
 
+# (start, end, screen-lift, saturation): shots measured darker or more saturated than the rest
+SHOT_CORRECTIONS = [
+    (10.45, 11.72, 0.22, 0.85), (13.0, 14.0, 0.22, 0.85),
+    (44.6, 47.5, 0.26, 0.62), (49.65, 51.4, 0.08, 0.8), (52.2, 53.0, 0.04, 0.85),
+    (55.7, 58.2, 0.02, 0.8), (58.75, 60.3, 0.14, 0.75), (72.85, 74.75, 0.22, 0.8),
+    (77.72, 77.97, 0.2, 0.85), (79.8, 83.6, 0.16, 1.0), (5.9, 6.6, 0.0, 0.8),
+]
+
+
+def shot_correct(fr, t):
+    for a, b, lift, sat in SHOT_CORRECTIONS:
+        k = smooth(seg(t, a - 0.08, a + 0.04)) * (1 - smooth(seg(t, b - 0.04, b + 0.08)))
+        if k <= 0:
+            continue
+        out = fr + (1 - fr) * lift
+        lum = (out @ np.float32([0.3, 0.59, 0.11]))[..., None]
+        out = lum + (out - lum) * sat
+        fr = mix(fr, np.clip(out, 0, 1), k)
+    return fr
+
+
 PULSE_RANGES = ((7.0, 10.0), (20.8, 25.8), (26.6, 79.6), (85.6, 98.7))
 
 
@@ -1136,6 +1216,7 @@ def render(t):
             fn = f
     fr = fn(t)
     fr = catchcopy(fr, t)
-    fr = beat_pulse(np.clip(fr, 0, 1), t)
+    fr = shot_correct(np.clip(fr, 0, 1), t)
+    fr = beat_pulse(fr, t)
     fr = grade(fr, grade_amount(t))
     return np.clip(fr, 0, 1)
