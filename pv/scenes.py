@@ -1099,6 +1099,7 @@ def intro_frame(k, t):
         place(fr, tachie, fx, 0, tx + off, 6, 0.98, 0, tu)
         if tu < 1:
             place(fr, tachie, fx, 0, tx + off * 2.2, 6, 0.98, 0, (1 - tu) * 0.35)
+    petal_shower(fr, tau, n=56, seed=100 + k)  # each new CG brings a fall of petals
     name_plate(fr, tau - entry - 0.15, "r" if side == "l" else "l")
     if k == 0:
         fr = to_white(fr, 1 - smooth(seg(t, 26.5, 27.05)))

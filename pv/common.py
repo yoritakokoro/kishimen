@@ -448,6 +448,50 @@ def petals(dst, t, n=40, seed=1, scale=1.0, speed=1.0, opacity=1.0, burst=None):
     return dst
 
 
+@lru_cache(None)
+def _shower(n, seed):
+    rng = np.random.default_rng(seed)
+    return dict(
+        x=rng.uniform(-0.05, 1.1, n), y0=rng.uniform(-0.75, -0.04, n),
+        vx=rng.uniform(-0.10, -0.02, n), vy=rng.uniform(0.24, 0.44, n),
+        rot=rng.uniform(0, 6.28, n), rv=rng.uniform(-3.0, 3.0, n),
+        tumble=rng.uniform(1.5, 4.5, n), ph=rng.uniform(0, 6.28, n),
+        size=rng.uniform(0.7, 1.3, n), col=rng.integers(0, 3, n), depth=rng.uniform(0, 1, n) ** 1.5,
+    )
+
+
+SHOWER_COLS = [(0.99, 0.70, 0.81), (0.96, 0.58, 0.74), (1.0, 0.86, 0.91)]
+
+
+def petal_shower(dst, tau, n=42, seed=1, scale=1.0, opacity=1.0):
+    """A burst of petals that starts above the frame at tau = 0 and falls through it, swaying."""
+    if tau < 0 or opacity <= 0.01:
+        return dst
+    P = _shower(n, seed)
+    shape = _petal_shape()
+    masks = [np.zeros((H, W), np.uint8) for _ in SHOWER_COLS]
+    for i in range(n):
+        d = P["depth"][i]
+        fall = 0.75 + 0.5 * d  # nearer petals fall faster
+        y = P["y0"][i] + P["vy"][i] * fall * tau
+        if y > 1.15:
+            continue
+        x = P["x"][i] + P["vx"][i] * tau + 0.04 * math.sin(P["ph"][i] + tau * 2.2)
+        sz = (8 + 14 * d) * P["size"][i] * scale
+        rot = P["rot"][i] + P["rv"][i] * tau
+        sq = 0.35 + 0.65 * abs(math.sin(P["ph"][i] + tau * P["tumble"][i]))
+        c, s = math.cos(rot), math.sin(rot)
+        px = shape[:, 0] * sz * sq
+        py = shape[:, 1] * sz
+        X = x * W + px * c - py * s
+        Y = y * H + px * s + py * c
+        pts = np.round(np.stack([X, Y], 1) * 16).astype(np.int32)
+        cv2.fillPoly(masks[P["col"][i]], [pts], 255, lineType=cv2.LINE_AA, shift=4)
+    for m, col in zip(masks, SHOWER_COLS):
+        fill_mask(dst, m, col, 0.95 * opacity)
+    return dst
+
+
 # --------------------------------------------------------------------------- text
 
 
