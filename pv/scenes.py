@@ -12,7 +12,6 @@ from PIL import Image
 
 import backgrounds
 from common import *  # noqa: F401,F403
-from common import _premul
 
 DURATION = 114.47
 
@@ -40,8 +39,8 @@ CARD_FACE = {
     "card1": (610, 370), "card2": (500, 360), "card3": (580, 440), "card4": (630, 450), "card5": (660, 540),
     "card6": (690, 370), "card7": (530, 380), "card8": (330, 450), "card9": (590, 410), "card10": (690, 330),
     "card11": (580, 490), "card12": (600, 560), "card13": (590, 370), "card15": (670, 380), "card16": (580, 390),
-    "card17": (720, 370), "card18": (400, 620), "card19": (430, 470), "card20": (580, 340), "card21": (600, 310),
-    "card22": (630, 350),
+    "card17": (720, 370), "card18": (440, 430), "card19": (430, 470), "card20": (580, 340), "card21": (600, 310),
+    "card22": (630, 350), "card23": (890, 370),
     "Yoshino SSR1": (650, 370), "Yoshino SSR2": (680, 420), "Yoshino SSR3": (620, 365), "Yoshino SSR4": (630, 330),
     "Yoshino SSR5": (360, 320),
 }
@@ -133,42 +132,17 @@ def extract_on_white(name, thresh=46.0, enclosed=False, protect=()):
     return out
 
 
-def compose_group():
-    """All-Yoshino group shot assembled from the cut-out artwork."""
-    GW, GH = 1180, 885
-    bgim = backgrounds.draw_group_backdrop((GW, GH))
-    dst = np.asarray(bgim, np.float32) / 255.0
-    canvas = np.zeros((GH, GW, 3), np.float32)
-    canvas[:] = dst
-    layout = [  # name, face x, face y, scale
-        ("tachie9", 250, 215, 1.55),
-        ("tachie5", 950, 200, 1.6),
-        ("tachie3", 610, 235, 1.45),
-        ("tachie2", 280, 520, 1.65),
-        ("tachie8", 905, 545, 1.6),
-        ("tachie4", 585, 600, 1.62),
-    ]
-    for name, x, y, s in layout:
-        lay = _place_canvas(name, x, y, s, GW, GH)
-        a = lay[..., 3:4]
-        canvas = canvas * (1 - a) + lay[..., :3]
-    return _premul(np.dstack([np.clip(canvas, 0, 1) * 255, np.full((GH, GW), 255)]).astype(np.uint8))
+GROUP_W, GROUP_H = 1180, 885
+GROUP_LAYOUT = [  # name, face x, face y (canvas px), scale, rise speed (canvas px/s)
+    ("tachie9", 250, 215, 1.55, 9), ("tachie5", 950, 200, 1.6, 11), ("tachie3", 610, 235, 1.45, 10),
+    ("tachie2", 280, 520, 1.65, 13), ("tachie8", 905, 545, 1.6, 12), ("tachie4", 585, 600, 1.62, 14),
+]
 
 
-def compose_action():
-    GW, GH = 1180, 885
-    canvas = np.asarray(backgrounds.draw_sky_burst((GW, GH)), np.float32) / 255.0
-    layout = [
-        ("tachie1", 960, 150, 0.95, -12),
-        ("ysn2", 230, 250, 0.25, 8),
-        ("ysn3", 950, 420, 0.22, -6),
-        ("ysn6", 260, 650, 0.17, 10),
-        ("ysn4", 600, 330, 0.30, -4),
-    ]
-    for name, x, y, s, ang in layout:
-        lay = _place_canvas(name, x, y, s, GW, GH, ang)
-        canvas = canvas * (1 - lay[..., 3:4]) + lay[..., :3]
-    return _premul(np.dstack([np.clip(canvas, 0, 1) * 255, np.full((GH, GW), 255)]).astype(np.uint8))
+def compose_group_bg():
+    bgim = backgrounds.draw_group_backdrop((GROUP_W, GROUP_H))
+    rgb = np.asarray(bgim, np.uint8)
+    return np.dstack([rgb, np.full((GROUP_H, GROUP_W), 255, np.uint8)])
 
 
 def _place_canvas(name, x, y, s, GW, GH, ang=0.0):
@@ -190,32 +164,35 @@ def prepare():
     from common import BUILD
     for key, fn in (("logo_title", lambda: img("logo_yoshinon")),  # user-supplied cut-out title logo
                     ("logo_brand", lambda: extract_on_white("logo1")),
-                    ("group", compose_group),
-                    ("action", compose_action)):
+                    ("group_bg", compose_group_bg)):
         if not (BUILD / f"{key}.npy").exists():
             register(key, fn())
     for name in ("ysn3", "ysn2", "ysn5", "ysn1", "card10", "card15", "card13", "Yoshino SSR1", "Yoshino SSR2", "Yoshino SSR3",
-                 "Yoshino SSR4", "Yoshino SSR5", "card9", "group"):
+                 "Yoshino SSR4", "Yoshino SSR5", "card9"):
         sketch(name)
 
 
 # --------------------------------------------------------------------------- building blocks
 
 
+CHECKER_ZOOM = 1.7  # the checker asset is shown enlarged
+CHECKER_SPEED = 40.0  # px/s
+
+
 @lru_cache(None)
-def checker():
-    a = img("haikei").astype(np.float32) / 255.0
-    tile = np.concatenate([a[..., :3], a[..., :3]], axis=1)
-    return cv2.resize(tile, (W, H), interpolation=cv2.INTER_AREA)
+def checker_tile():
+    a = img("haikei")[..., :3].astype(np.float32) / 255.0
+    h, w = a.shape[:2]
+    big = cv2.resize(a, (int(w * CHECKER_ZOOM), int(h * CHECKER_ZOOM)), interpolation=cv2.INTER_CUBIC)
+    reps = int(math.ceil(W / big.shape[1])) + 1
+    return np.ascontiguousarray(np.concatenate([big] * reps, axis=1)[:, :W])
 
 
-CHECKER_SPEED = 40.0  # px/s, the checker background rises
-
-
-def checker_at(t, boost=1.0):
-    """The pink checker asset scrolling upward; boost > 1 strengthens its (very pale) pattern."""
-    off = (t * CHECKER_SPEED) % H
-    c = cv2.warpAffine(checker(), np.float32([[1, 0, 0], [0, 1, -off]]), (W, H), flags=cv2.INTER_LINEAR,
+def checker_at(t, boost=1.0, direction=-1):
+    """The enlarged pink checker asset scrolling up (direction -1) or down (+1)."""
+    tile = checker_tile()
+    off = (t * CHECKER_SPEED) % tile.shape[0]
+    c = cv2.warpAffine(tile, np.float32([[1, 0, 0], [0, 1, direction * off]]), (W, H), flags=cv2.INTER_LINEAR,
                        borderMode=cv2.BORDER_WRAP)
     if boost != 1.0:
         m = np.float32([0.97, 0.93, 0.95])
@@ -234,13 +211,23 @@ def flare():
     return FLARE
 
 
-def title_logo(dst, cx=W / 2, cy=H * 0.47, st=0.8, opacity=1.0, glow=0.0, flip=False, mono=0.0, bright=0.0):
-    """YOSHINON RHYME logo; st=1 fills the frame."""
+def title_logo(dst, cx=W / 2, cy=H * 0.47, st=0.8, opacity=1.0, glow=0.0, flip=False, mono=0.0, bright=0.0, sy=1.0):
+    """YOSHINON RHYME logo; st=1 fills the frame; sy < 1 squashes it vertically (for the flip)."""
     if opacity <= 0.001:
         return dst
     w, h = size_of("logo_title")
     s = W / w * st
-    lay = warp_layer("logo_title", w / 2, h / 2, cx, cy, s, 0.0, flip)
+    if sy >= 0.999:
+        lay = warp_layer("logo_title", w / 2, h / 2, cx, cy, s, 0.0, flip)
+    else:
+        level = 0
+        while s * 2 ** level < 0.5 and level < 5:
+            level += 1
+        src = mip("logo_title", level)
+        f = 2 ** level
+        ss = s * f
+        M = np.float32([[ss, 0, cx - ss * w / f / 2], [0, ss * sy, cy - ss * sy * h / f / 2]])
+        lay = cv2.warpAffine(src, M, (W, H), flags=cv2.INTER_LINEAR, borderValue=0)
     lf = to_f(lay)
     if mono or bright:
         a = lf[..., 3:4]
@@ -253,6 +240,12 @@ def title_logo(dst, cx=W / 2, cy=H * 0.47, st=0.8, opacity=1.0, glow=0.0, flip=F
         gl = np.clip(g * 1.4, 0, 1)[..., None] * glow
         dst[:] = screen(dst, gl * np.float32([1.0, 0.82, 0.92]))
     return over(dst, lf, opacity)
+
+
+def flip_squash(t, t0, dur=0.6):
+    """Vertical scale for two quick flips over the horizontal axis (1 -> 0 -> 1 -> 0 -> 1)."""
+    e = smooth(seg(t, t0, t0 + dur))
+    return max(0.03, abs(math.cos(2 * math.pi * e))), e
 
 
 def heart_ribbon(dst, u, cx=W / 2, cy=H * 0.47, st=0.8, opacity=1.0, glow=0.0, tint=None):
@@ -296,18 +289,18 @@ def heart_ribbon(dst, u, cx=W / 2, cy=H * 0.47, st=0.8, opacity=1.0, glow=0.0, t
     return over(dst, acc, opacity)
 
 
-SQ_SOFT = [
-    (0.30, 0.42, 0.62, 20, 6, (0.97, 0.62, 0.78), 0.45),
-    (0.72, 0.58, 0.55, -12, -5, (0.99, 0.74, 0.86), 0.45),
-    (0.55, 0.25, 0.40, 35, 9, (1.0, 0.88, 0.93), 0.5),
-    (0.15, 0.85, 0.45, 5, -7, (0.96, 0.56, 0.74), 0.35),
-    (0.90, 0.15, 0.38, 28, 8, (0.98, 0.68, 0.82), 0.4),
+SQ_SOFT = [  # (cx, cy, size, angle0, deg/s, colour, alpha)
+    (0.30, 0.42, 0.62, 20, 9, (0.96, 0.52, 0.72), 0.55),
+    (0.72, 0.58, 0.55, -12, -8, (0.98, 0.64, 0.80), 0.55),
+    (0.55, 0.25, 0.40, 35, 13, (1.0, 0.80, 0.88), 0.6),
+    (0.15, 0.85, 0.45, 5, -10, (0.94, 0.46, 0.68), 0.45),
+    (0.90, 0.15, 0.38, 28, 12, (0.97, 0.58, 0.76), 0.5),
 ]
 SQ_VIVID = [
-    (0.25, 0.35, 0.70, 24, 14, (0.95, 0.38, 0.64), 0.55),
-    (0.78, 0.62, 0.66, -18, -12, (0.98, 0.55, 0.75), 0.6),
-    (0.58, 0.12, 0.45, 40, 18, (1.0, 0.82, 0.90), 0.55),
-    (0.10, 0.90, 0.50, 8, -16, (0.93, 0.32, 0.58), 0.5),
+    (0.25, 0.35, 0.70, 24, 21, (0.93, 0.30, 0.58), 0.6),
+    (0.78, 0.62, 0.66, -18, -18, (0.97, 0.46, 0.68), 0.65),
+    (0.58, 0.12, 0.45, 40, 27, (1.0, 0.74, 0.86), 0.6),
+    (0.10, 0.90, 0.50, 8, -24, (0.90, 0.26, 0.52), 0.55),
 ]
 
 
@@ -445,7 +438,7 @@ def catchcopy(dst, t):
     return dst
 
 
-NAME_SQ_COLS = [np.float32(YOSHINO_COLOR) / 255 * 0.92, np.float32([0.94, 0.52, 0.71])]
+NAME_SQ_COLS = [np.float32(YOSHINO_COLOR) / 255 * 0.92, np.float32([0.93, 0.42, 0.64])]
 
 
 def name_squares(dst, tau, xs, widths, side):
@@ -462,7 +455,7 @@ def name_squares(dst, tau, xs, widths, side):
         cx = gx + gw / 2 + sgn * dist
         cy = cy0 + (12 if i % 2 else -12)
         # rolling: rotation follows the distance travelled, then a slow spin once settled
-        spin = (1 if i % 2 == 0 else -1) * 18.0 * max(0.0, tau - 0.4)
+        spin = (1 if i % 2 == 0 else -1) * 27.0 * max(0.0, tau - 0.4)
         ang = 45.0 + math.degrees(dist / (size / 2)) * sgn + spin
         col = NAME_SQ_COLS[i % 2]
         op = smooth(clamp01(u * 2.5)) * 0.95
@@ -717,8 +710,9 @@ def fzo(name, zoom, dx=0, dy=0):
 
 
 class Shot:
-    def __init__(self, t0, render, tin="cut", tdur=0.0):
+    def __init__(self, t0, render, tin="cut", tdur=0.0, no_punch=False):
         self.t0, self.render, self.tin, self.tdur = t0, render, tin, tdur
+        self.no_punch = no_punch
 
 
 def run_shots(shots, t):
@@ -732,6 +726,91 @@ def run_shots(shots, t):
         prev = shots[i - 1].render(t)
         cur = transition(prev, cur, (t - s.t0) / s.tdur, s.tin)
     return cur
+
+
+@lru_cache(None)
+def _dusk_maps():
+    xn, yn = xy_norm()
+    stops = np.float32([[0.80, 0.70, 0.98], [1.0, 0.86, 0.82], [1.08, 0.84, 0.64]])
+    yy = yn[..., None]
+    mult = np.where(yy < 0.5, stops[0] + (stops[1] - stops[0]) * (yy / 0.5),
+                    stops[1] + (stops[2] - stops[1]) * ((yy - 0.5) / 0.5)).astype(np.float32)
+    sun = np.exp(-(((xn - 0.86) * W) ** 2 + ((yn - 0.40) * H) ** 2) / (2 * (0.30 * W) ** 2)).astype(np.float32)
+    vig = (1 - 0.32 * np.clip(((xn - 0.5) ** 2 + (yn - 0.5) ** 2) * 2.2, 0, 1)).astype(np.float32)
+    return mult, sun[..., None], vig[..., None]
+
+
+def _dusk(fr, t):
+    """Twilight grade: violet sky, orange street, a low warm sun from the right, darker corners."""
+    mult, sun, vig = _dusk_maps()
+    out = fr * mult
+    lum = (out @ np.float32([0.3, 0.59, 0.11]))[..., None]
+    out = lum + (out - lum) * 1.18
+    out = screen(np.clip(out, 0, 1), sun * np.float32([1.0, 0.58, 0.28]), 0.6)
+    fr[:] = np.clip(out * vig, 0, 1)
+    return fr
+
+
+def _twinkle(fr, t):
+    """Glints that flash up as the white flash clears (55 s)."""
+    pts = ((760, 200, 54), (850, 300, 34), (690, 140, 30), (880, 160, 24), (620, 260, 22))
+    m = np.zeros((H, W), np.uint8)
+    for k, (x, y, sz) in enumerate(pts):
+        a = pulse(t, 54.66 + k * 0.05, 54.78 + k * 0.05, 55.0)
+        if a <= 0:
+            continue
+        r = sz * (0.5 + 0.5 * a)
+        poly = [(x + math.cos(j * math.pi / 4) * (r if j % 2 == 0 else r * 0.18),
+                 y + math.sin(j * math.pi / 4) * (r if j % 2 == 0 else r * 0.18)) for j in range(8)]
+        cv2.fillPoly(m, [np.round(np.float32(poly) * 16).astype(np.int32)], int(255 * a), cv2.LINE_AA, 4)
+    if not m.any():
+        return fr
+    glow = cv2.GaussianBlur(m, (0, 0), 9).astype(np.float32) / 255.0
+    fr[:] = fr * (1 - np.clip(glow * 2.0, 0, 1)[..., None] * 0.6) + \
+        np.clip(glow * 2.0, 0, 1)[..., None] * 0.6 * np.float32([1.0, 0.78, 0.40])
+    fill_mask(fr, m, (1.0, 1.0, 0.95), 1.0)
+    return fr
+
+
+@lru_cache(None)
+def _feather_shape(n=22):
+    right, left = [], []
+    for i in range(n + 1):
+        s = i / n
+        right.append((0.30 * math.sin(math.pi * s ** 0.8) * (1 - 0.25 * s), -s))
+        left.append((-0.18 * math.sin(math.pi * s ** 0.9), -s))
+    return np.float32(right + left[::-1])
+
+
+@lru_cache(None)
+def _feather_params(n, seed):
+    rng = np.random.default_rng(seed)
+    return [(rng.uniform(0.0, 1.0), rng.uniform(0.95, 2.6), rng.uniform(0.9, 1.6), rng.uniform(55, 115),
+             rng.uniform(-35, 35), rng.uniform(0, 6.28), rng.uniform(2.0, 4.0)) for _ in range(n)]
+
+
+def _feathers(fr, t, t0=65.25, n=38, seed=3):
+    """Many very translucent angel feathers flying quickly upward."""
+    tau = t - t0
+    shape = _feather_shape()
+    m = np.zeros((H, W), np.uint8)
+    for x0, y0, v, size, ang, ph, wob in _feather_params(n, seed):
+        y = (y0 - v * tau) * H
+        if y < -size * 1.2 or y > H + size * 1.2:
+            continue
+        x = x0 * W + 18 * math.sin(ph + tau * wob)
+        a = math.radians(ang + 20 * math.sin(ph + tau * wob * 0.8))
+        c, sn = math.cos(a), math.sin(a)
+        px, py = shape[:, 0] * size, shape[:, 1] * size
+        pts = np.stack([x + px * c - py * sn, y + px * sn + py * c], 1)
+        cv2.fillPoly(m, [np.round(pts * 16).astype(np.int32)], 255, cv2.LINE_AA, 4)
+    if not m.any():
+        return fr
+    rim = cv2.GaussianBlur(cv2.dilate(m, np.ones((5, 5), np.uint8)), (0, 0), 2.0)
+    fill_mask(fr, rim, (0.70, 0.76, 0.90), 0.16)  # faint cool rim so the white vanes read on bright art
+    fill_mask(fr, cv2.GaussianBlur(m, (0, 0), 6), (1.0, 1.0, 1.0), 0.30)
+    fill_mask(fr, cv2.GaussianBlur(m, (0, 0), 1.0), (1.0, 1.0, 1.0), 0.45)
+    return fr
 
 
 def _drop(fr, t):
@@ -759,14 +838,14 @@ def _sparkles(fr, t):
 
 
 MONTAGE = [
-    Shot(44.6, kb("card9", fzo("card9", 1.25, 60, 20), fzo("card9", 1.38, -40, 0), 44.6, 47.5)),
+    Shot(44.6, kb("card9", fzo("card9", 1.25, 60, 20), fzo("card9", 1.38, -40, 0), 44.6, 47.5, extra=_dusk)),
     Shot(47.45, kb("card1", fz("card1", 1.45), fzo("card1", 1.6, -10, -15), 47.45, 49.7), "white", 0.5),
     Shot(49.65, kb("card7", fz("card7", 1.9), fzo("card7", 2.05, -10, -10), 49.65, 51.4,
                    adj=lambda u: dict(bright=0.12 * (1 - u), warm=0.06 * (1 - u))), "fade", 0.3),
     Shot(51.35, kb("card21", fzo("card21", 1.3, 0, 90), fzo("card21", 1.38, 10, 80), 51.35, 52.3), "fade", 0.25),
     Shot(52.2, kb("card21", fz("card21", 2.0), fzo("card21", 2.1, 10, -8), 52.2, 53.0), "fade", 0.25),
     Shot(53.0, kb("card11", fzo("card11", 1.25, 0, 30), fz("card11", 1.9), 53.0, 54.1), "fade", 0.12),
-    Shot(54.45, kb("card11", fzo("card11", 2.1, 30, -20), fzo("card11", 2.2, 30, -20), 54.45, 54.95, extra=_drop),
+    Shot(54.45, kb("card11", fzo("card11", 2.1, 30, -20), fzo("card11", 2.2, 30, -20), 54.45, 54.95),
          "white", 0.35),
     Shot(54.95, kb("card11", fzo("card11", 3.2, 0, 70), fzo("card11", 3.4, 0, 70), 54.95, 55.5, wash_k=0.55), "fade", 0.12),
     Shot(55.7, kb("card18", fzo("card18", 1.55, 20, 0), fzo("card18", 1.7, 0, -20), 55.7, 58.25, extra=_notes18),
@@ -775,10 +854,9 @@ MONTAGE = [
     Shot(60.2, kb("card4", fz("card4", 1.75), fzo("card4", 1.9, 0, -10), 60.2, 62.05, extra=_sparkles), "fade", 0.25),
     Shot(62.0, kb("card15", fz("card15", 2.1), fz("card15", 2.2), 62.0, 62.7, wash_k=0.75, sk=0.6), "fade", 0.15),
     Shot(62.65, kb("card15", fz("card15", 1.75), fzo("card15", 1.82, -10, -5), 62.65, 63.5), "fade", 0.15),
-    Shot(63.6, kb("card15", fzo("card15", 1.45, -60, 40), fzo("card15", 1.55, -80, 20), 63.6, 65.3), "white", 0.3),
-    Shot(65.25, kb("card10", fzo("card10", 1.15, 0, 40), fzo("card10", 1.2, 0, 40), 65.25, 66.6,
-                   wash_k=lambda u: 0.9 - 0.4 * u, sk=0.7), "white", 0.5),
-    Shot(66.5, kb("card10", fzo("card10", 1.18, 0, 50), fzo("card10", 1.22, 0, 50), 66.5, 67.25), "fade", 0.35),
+    Shot(63.6, kb("Yoshino SSR2", fzo("Yoshino SSR2", 1.3, 0, 40), fz("Yoshino SSR2", 1.45), 63.6, 65.3), "white", 0.3),
+    Shot(65.25, kb("card10", (690, 280, 1.5), (690, 545, 1.5), 65.25, 67.2,  # top-to-bottom reveal, feathers rising
+                   wash_k=lambda u: 0.8 * (1 - smooth(clamp01(u * 2.5))), extra=_feathers), "white", 0.5, no_punch=True),
     Shot(67.2, kb("card10", fz("card10", 2.2), fzo("card10", 2.3, 0, -5), 67.2, 68.0)),
     Shot(67.95, kb("card5", fzo("card5", 1.3, 0, -20), fzo("card5", 1.3, 0, -20), 67.95, 68.25), "fade", 0.3),
     Shot(68.2, kb("card5", fz("card5", 2.2), fz("card5", 2.3), 68.2, 68.75), "fade", 0.3),
@@ -792,7 +870,7 @@ MONTAGE = [
     Shot(76.2, kb("card2", fz("card2", 2.4), fzo("card2", 2.5, 0, -6), 76.2, 76.75), "fade", 0.2),
     Shot(76.72, kb("card17", fz("card17", 2.3), fzo("card17", 2.6, 10, 0), 76.72, 76.97)),
     Shot(76.97, kb("card6", fz("card6", 1.9), fzo("card6", 2.1, -10, 0), 76.97, 77.22)),
-    Shot(77.22, kb("card19", fzo("card19", 1.7, 40, 20), fzo("card19", 1.8, 40, 20), 77.22, 77.47, extra=_bang)),
+    Shot(77.22, kb("card19", fzo("card19", 1.7, 40, 20), fzo("card19", 1.8, 40, 20), 77.22, 77.47)),
     Shot(77.47, kb("card20", fz("card20", 2.0), fzo("card20", 2.15, 0, -6), 77.47, 77.72)),
     Shot(77.72, kb("card22", fz("card22", 2.1), fz("card22", 2.3), 77.72, 77.97)),
     Shot(77.97, kb("card3", fz("card3", 2.0), fzo("card3", 2.3, 10, 0), 77.97, 78.22)),
@@ -808,7 +886,7 @@ def add_punch_ins(shots, end):
         out.append(sh)
         t1 = shots[i + 1].t0 if i + 1 < len(shots) else end
         params = getattr(sh.render, "params", None)
-        if params is None or t1 - sh.t0 < 1.3:
+        if params is None or sh.no_punch or t1 - sh.t0 < 1.3:
             continue
         cands = [float(b) for b in BEAT_T if sh.t0 + 0.6 < b < t1 - 0.45]
         if not cands:
@@ -847,8 +925,8 @@ MONTAGE = add_punch_ins(snap_cuts(MONTAGE, 78.72), 78.72)
 
 def action_shot(t):
     u = seg(t, 78.72, 79.85)
-    z = lerp(1.0, 1.08, u)
-    fr = cover("action", 590, 442, z)
+    fx, fy = face("card23")
+    fr = cover("card23", lerp(700, fx - 60, smooth(u)), lerp(430, fy + 30, smooth(u)), lerp(1.0, 1.18, u))
     amt = 0.45 * (1 - smooth(seg(t, 78.72, 79.0))) + 0.08
     fr = zoom_blur(fr, amt * 0.6, n=8)
     return fr
@@ -891,11 +969,11 @@ def seg_opening(t):
         return full(0.0)
     if t < 0.9:
         return full(smooth(seg(t, 0.35, 0.9)) ** 1.4)
-    fr = to_white(checker_at(t), 0.45)
+    fr = to_white(checker_at(t, 1.8), 0.2)
     starts = [o[-1] for o in OPEN_SKETCHES] + [OPEN_END]
     for i, (name, x, y, sc, a0, a1, ddx, ddy, col, tb) in enumerate(OPEN_SKETCHES):
         te = starts[i + 1]
-        if t < tb or t > te + 0.07:
+        if t < tb or t > te + 0.12:
             continue
         u = seg(t, tb, te)
         if name in CARD_FACE:  # card art: scale relative to cover size
@@ -907,7 +985,7 @@ def seg_opening(t):
         dx = x * W + ddx * ease_out(u)
         dy = y * H + ddy * ease_out(u)
         rv = lerp(0, 1400, ease_out(seg(t, tb, tb + 0.16)))
-        op = smooth(seg(t, tb, tb + 0.05)) * (1 - seg(t, te, te + 0.07))
+        op = smooth(seg(t, tb, tb + 0.05)) * (1 - smooth(seg(t, te - 0.04, te + 0.12)))
         sketch_tinted(fr, name, fx, fy, dx, dy, s * (1 + 0.06 * u), lerp(a0, a1, ease_out(u)), col, op, reveal=rv)
     fr = to_white(fr, pulse(t, 2.15, 2.27, 2.5) * 0.85)
     return fr
@@ -929,20 +1007,18 @@ def seg_brand(t):
     if t < 2.6:
         fr = seg_opening(t)
         fr = to_white(fr, seg(t, 2.3, 2.6) * 0.5)
-        base = to_white(checker_at(t), 0.25)
+        base = to_white(checker_at(t, 1.8), 0.12)
         fr = mix(fr, base, smooth(seg(t, 2.3, 2.6)))
     else:
-        fr = to_white(checker_at(t), 0.25)
+        fr = to_white(checker_at(t, 1.8), 0.12)
     # white then soft squares (3.15-4.0)
     fr = to_white(fr, smooth(seg(t, 3.1, 3.3)))
     if t > 3.3:
         squares(fr, t, SQ_SOFT, grow=lerp(0.7, 1.0, smooth(seg(t, 3.3, 4.0))), opacity=smooth(seg(t, 3.3, 3.9)))
     # Yoshino 1 (4.0 - 5.0): cut-out at upper left, face clear of the logo
     if 3.95 < t < 5.1:
-        u = ease_out(seg(t, 3.95, 4.3))
-        out_u = ease_in(seg(t, 4.8, 5.05))
         cl = fr.copy()
-        put_reveal(cl, "ysn4", lerp(120, 195, u) + 700 * out_u, 207, 0.31, 1.0, seg(t, 4.087, 4.37))
+        put_reveal(cl, "ysn4", lerp(105, 235, seg(t, 3.95, 5.05)), 207, 0.31, 1.0, seg(t, 4.087, 4.37))
         fr = mix(fr, cl, smooth(seg(t, 3.95, 4.15)) * (1 - smooth(seg(t, 4.9, 5.05))))
     # vivid squares (5.0 - 6.0)
     if t > 4.85:
@@ -951,9 +1027,8 @@ def seg_brand(t):
         fr = mix(fr, base, smooth(seg(t, 4.85, 5.05)))
     # Yoshino 2 (6.0 - 6.6): cut-out at upper right
     if t > 5.9:
-        u = ease_out(seg(t, 5.9, 6.3))
         cl = fr.copy()
-        put_reveal(cl, "ysn6", lerp(900, 830, u), 207, 0.40, 1.0, seg(t, 6.258, 6.5))
+        put_reveal(cl, "ysn6", 830, lerp(160, 255, seg(t, 5.9, 6.8)), 0.40, 1.0, seg(t, 6.258, 6.5))
         fr = mix(fr, cl, smooth(seg(t, 5.9, 6.1)))
     lop = smooth(seg(t, 2.3, 2.6))
     if t < 2.6:
@@ -968,8 +1043,8 @@ def seg_starring(t):
     base = full(0, (0.99, 0.80, 0.88))
     squares(base, t, SQ_VIVID, grow=1.1)
     squares(base, t * 0.7, SQ_SOFT, grow=1.3, opacity=0.7)
-    for name, x, y, sc, t0 in (("tachie4", 240, 250, 1.7, 6.85), ("ysn5", 585, 395, 0.32, 7.15),
-                               ("tachie3", 830, 560, 1.4, 7.0)):
+    for name, x, y, sc, t0 in (("tachie4", 240, 250, 1.7, 6.85), ("ysn5", 585, 395, 0.32, 7.6),
+                               ("tachie3", 830, 560, 1.4, 7.26)):
         put(base, name, x, y, scale=sc, opacity=smooth(seg(t, t0, t0 + 0.45)))
     starring_text(base, t)
     base = to_white(base, smooth(seg(t, 10.0, 10.45)))
@@ -1016,7 +1091,13 @@ def seg_shrine(t):
 
 
 def group_frame(t, z):
-    return cover("group", 590, 442, z)
+    """Backdrop plus the six cut-outs, each drifting slowly upward."""
+    s = max(W / GROUP_W, H / GROUP_H) * z
+    fr = cover("group_bg", GROUP_W / 2, GROUP_H / 2, z)
+    rise = max(0.0, t - 14.0)
+    for name, x, y, sc, v in GROUP_LAYOUT:
+        put(fr, name, W / 2 + (x - GROUP_W / 2) * s, H / 2 + (y - v * rise - GROUP_H / 2) * s, scale=sc * s)
+    return fr
 
 
 def seg_group(t):
@@ -1048,21 +1129,17 @@ def seg_group(t):
 
 
 def seg_title(t):
-    fr = checker_at(t, 2.4)
+    fr = checker_at(t, 2.4, direction=1)
     sq = smooth(seg(t, 22.8, 24.0))
     if sq > 0:
         squares(fr, t, SQ_SOFT, grow=lerp(0.5, 1.25, seg(t, 22.8, 26.0)), opacity=sq)
         squares(fr, t * 0.8, SQ_VIVID[:2], grow=lerp(0.4, 1.0, seg(t, 23.0, 26.0)), opacity=sq * 0.6)
-    if t < 20.13:
-        fr = to_white(fr, 0.5, (1.0, 0.93, 0.96))
-        title_logo(fr, st=0.84, opacity=0.8, flip=True, glow=0.3)
-    elif t < 20.75:
-        u = seg(t, 20.13, 20.75)
-        fr = to_white(fr, 0.6 * (1 - u))
-        title_logo(fr, st=lerp(0.9, 0.82, ease_out(u)), opacity=0.35 + 0.65 * smooth(seg(t, 20.5, 20.75)),
-                   mono=0.6 * (1 - u))
+    if t < 20.6:
+        k, e = flip_squash(t, 20.0)
+        fr = to_white(fr, 0.45 * (1 - e), (1.0, 0.93, 0.96))
+        title_logo(fr, st=0.84, sy=k, glow=0.25 + 0.5 * (1 - k), mono=0.5 * (1 - e))
     else:
-        title_logo(fr, st=0.82 - 0.02 * seg(t, 20.75, 26.0))
+        title_logo(fr, st=0.84 - 0.02 * seg(t, 20.6, 26.0))
     copyright_text(fr, t, 21.95)
     fr = to_white(fr, smooth(seg(t, 25.9, 26.5)))
     return fr
@@ -1160,6 +1237,8 @@ def seg_montage(t):
     # white flashes between beats
     fr = to_white(fr, pulse(t, 54.0, 54.3, 54.5))
     fr = to_white(fr, pulse(t, 55.4, 55.6, 55.9))
+    if 54.6 < t < 55.05:
+        _twinkle(fr, t)
     if 58.1 < t < 58.9:
         u = seg(t, 58.15, 58.8)
         fr = to_white(fr, pulse(t, 58.1, 58.3, 58.85))
@@ -1206,14 +1285,20 @@ def credit_bg(i, t):
     side = CREDITS[i][0]
     zz = z * (1 + 0.12 * u)
     tx = W * 0.66 if side == "l" else W * 0.34  # face on the side opposite the text
-    cx, cy = face_at(name, zz, tx + lerp(-60, 60, u), H * 0.45)
-    fr = cover(name, cx, cy, zz)
+    ang = lerp(0.0, 4.0, smooth(u)) if i == 0 else 0.0  # page 1 turns slowly clockwise
+    ty = H * 0.45 + (lerp(-15, 30, smooth(u)) if i == 0 else 0.0)
+    cx, cy = face_at(name, zz, tx + lerp(-60, 60, u), ty)
+    fr = cover(name, cx, cy, zz, ang)
     fr = wash(fr, 0.62)
     fr = to_white(fr, 0.18, (1.0, 0.9, 0.95))
     xn, yn = xy_norm()
-    specs = [(0.18 if side == "l" else 0.82, 0.38, 0.75, 18, 3, (0.95, 0.42, 0.66), 0.42),
-             (0.10 if side == "l" else 0.90, 0.85, 0.5, -10, -4, (1.0, 0.78, 0.88), 0.5),
-             (0.6, -0.05, 0.5, 30, 5, (0.98, 0.6, 0.78), 0.3)]
+    def mx(x):  # mirror for right-hand text pages
+        return x if side == "l" else 1 - x
+    # kept to the text side and the corners, away from Yoshino's face
+    specs = [(mx(0.10), 0.30, 0.42, 18, 10, (0.93, 0.32, 0.58), 0.55),
+             (mx(0.08), 0.92, 0.38, -10, -12, (0.98, 0.58, 0.76), 0.6),
+             (mx(0.95), 0.95, 0.30, 30, 14, (0.95, 0.45, 0.68), 0.5),
+             (mx(0.40), -0.10, 0.28, 40, 11, (1.0, 0.72, 0.85), 0.45)]
     squares(fr, t - t0, specs)
     return fr
 
@@ -1254,19 +1339,15 @@ def seg_finale(t):
                    bright=0.2 * (1 - seg(t, 100.5, 101.0)), glow=1.2 - 0.8 * seg(t, 100.5, 101.0))
         fr = zoom_blur(fr, 0.4 * hit)
         return fr
-    fr = checker_at(t, 2.4)
+    fr = checker_at(t, 2.4, direction=1)
     if t < 101.62:
         title_logo(fr, st=0.84, glow=0.25)
-    elif t < 101.8:
-        title_logo(fr, st=0.84, flip=True, opacity=0.7, glow=0.3)
-        fr = to_white(fr, 0.3)
-    elif t < 102.5:
-        u = seg(t, 101.8, 102.5)
-        fr = to_white(fr, 0.6 * (1 - u))
-        title_logo(fr, st=lerp(0.9, 0.84, ease_out(u)), opacity=0.3 + 0.7 * smooth(seg(t, 102.2, 102.5)),
-                   mono=0.6 * (1 - u))
+    elif t < 102.22:
+        k, e = flip_squash(t, 101.62)
+        fr = to_white(fr, 0.3 * math.sin(math.pi * e))
+        title_logo(fr, st=0.84, sy=k, glow=0.25 + 0.5 * (1 - k), mono=0.4 * math.sin(math.pi * e))
     else:
-        title_logo(fr, st=0.84 - 0.02 * seg(t, 102.5, 107.0), opacity=1 - smooth(seg(t, 106.9, 107.75)))
+        title_logo(fr, st=0.84 - 0.02 * seg(t, 102.22, 107.0), opacity=1 - smooth(seg(t, 106.9, 107.75)))
     return fr
 
 
@@ -1318,7 +1399,7 @@ SEGMENTS = [
 # (start, end, screen-lift, saturation): shots measured darker or more saturated than the rest
 SHOT_CORRECTIONS = [
     (10.45, 11.72, 0.22, 0.85), (13.0, 14.0, 0.22, 0.85),
-    (44.6, 47.5, 0.26, 0.62), (49.65, 51.4, 0.08, 0.8), (52.2, 53.0, 0.04, 0.85),
+(49.65, 51.4, 0.08, 0.8), (52.2, 53.0, 0.04, 0.85),
     (55.7, 58.2, 0.02, 0.8), (58.75, 60.3, 0.14, 0.75), (72.85, 74.75, 0.22, 0.8),
     (77.72, 77.97, 0.2, 0.85), (79.8, 83.6, 0.16, 1.0), (5.9, 6.6, 0.0, 0.8),
 ]
@@ -1353,6 +1434,8 @@ def grade(fr, g=1.0):
 
 def grade_amount(t):
     g = smooth(seg(t, 0.5, 1.0)) * (1 - smooth(seg(t, 113.15, 113.6)))
+    if 44.6 < t < 47.6:  # the twilight shot keeps its depth
+        g *= 1 - 0.5 * smooth(seg(t, 44.6, 44.9)) * (1 - smooth(seg(t, 47.3, 47.6)))
     if 99.3 < t < 100.75:
         g *= 0.35
     return g
