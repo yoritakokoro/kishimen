@@ -19,7 +19,7 @@ import json
 from pathlib import Path
 
 _BEATS = json.load(open(Path(__file__).resolve().parent / "beats.json"))
-BEAT_T = np.array(_BEATS["beats"], np.float64)
+BEAT_T = np.array(_BEATS["beats"], np.float64) + 0.025  # align to onset centres
 DOWNBEAT = _BEATS["downbeat_offset"]
 
 
@@ -139,9 +139,13 @@ GROUP_LAYOUT = [  # name, face x, face y (canvas px), scale, rise speed (canvas 
 ]
 
 
-def compose_group_bg():
-    bgim = backgrounds.draw_group_backdrop((GROUP_W, GROUP_H))
-    rgb = np.asarray(bgim, np.uint8)
+def compose_group():
+    """The six cut-outs and backdrop flattened into one picture."""
+    canvas = np.asarray(backgrounds.draw_group_backdrop((GROUP_W, GROUP_H)), np.float32) / 255.0
+    for name, x, y, sc, _ in GROUP_LAYOUT:
+        lay = _place_canvas(name, x, y, sc, GROUP_W, GROUP_H)
+        canvas = canvas * (1 - lay[..., 3:4]) + lay[..., :3]
+    rgb = (np.clip(canvas, 0, 1) * 255 + 0.5).astype(np.uint8)
     return np.dstack([rgb, np.full((GROUP_H, GROUP_W), 255, np.uint8)])
 
 
@@ -164,7 +168,7 @@ def prepare():
     from common import BUILD
     for key, fn in (("logo_title", lambda: img("logo_yoshinon")),  # user-supplied cut-out title logo
                     ("logo_brand", lambda: extract_on_white("logo1")),
-                    ("group_bg", compose_group_bg)):
+                    ("group", compose_group)):
         if not (BUILD / f"{key}.npy").exists():
             register(key, fn())
     for name in ("ysn3", "ysn2", "ysn5", "ysn1", "card10", "card15", "card13", "Yoshino SSR1", "Yoshino SSR2", "Yoshino SSR3",
@@ -716,16 +720,18 @@ class Shot:
 
 
 def run_shots(shots, t):
+    """Each transition is centred on its cut, so the new picture arrives on the beat."""
     i = 0
     for k, s in enumerate(shots):
         if t >= s.t0:
             i = k
-    s = shots[i]
-    cur = s.render(t)
-    if i > 0 and s.tin != "cut" and t < s.t0 + s.tdur:
-        prev = shots[i - 1].render(t)
-        cur = transition(prev, cur, (t - s.t0) / s.tdur, s.tin)
-    return cur
+    for j in (i, i + 1):
+        if 0 < j < len(shots):
+            s = shots[j]
+            a = s.t0 - s.tdur / 2
+            if s.tin != "cut" and s.tdur > 0 and a <= t < a + s.tdur:
+                return transition(shots[j - 1].render(t), s.render(t), (t - a) / s.tdur, s.tin)
+    return shots[i].render(t)
 
 
 @lru_cache(None)
@@ -846,13 +852,13 @@ MONTAGE = [
     Shot(52.2, kb("card21", fz("card21", 2.0), fzo("card21", 2.1, 10, -8), 52.2, 53.0), "fade", 0.25),
     Shot(53.0, kb("card11", fzo("card11", 1.25, 0, 30), fz("card11", 1.9), 53.0, 54.1), "fade", 0.12),
     Shot(54.45, kb("card11", fzo("card11", 2.1, 30, -20), fzo("card11", 2.2, 30, -20), 54.45, 54.95),
-         "white", 0.35),
-    Shot(54.95, kb("card11", fzo("card11", 3.2, 0, 70), fzo("card11", 3.4, 0, 70), 54.95, 55.5, wash_k=0.55), "fade", 0.12),
+         "fade", 0.2),
+    Shot(54.95, kb("card11", fzo("card11", 3.2, 0, 70), fzo("card11", 3.4, 0, 70), 54.95, 55.5), "fade", 0.12),
     Shot(55.7, kb("card18", fzo("card18", 1.55, 20, 0), fzo("card18", 1.7, 0, -20), 55.7, 58.25, extra=_notes18),
          "white", 0.4),
-    Shot(58.75, kb("card8", fzo("card8", 1.35, -30, 80), fzo("card8", 1.5, 40, -20), 58.75, 60.25), "white", 0.6),
+    Shot(58.75, kb("card8", fzo("card8", 1.35, -30, 80), fzo("card8", 1.5, 40, -20), 58.75, 60.25), "fade", 0.25),
     Shot(60.2, kb("card4", fz("card4", 1.75), fzo("card4", 1.9, 0, -10), 60.2, 62.05, extra=_sparkles), "fade", 0.25),
-    Shot(62.0, kb("card15", fz("card15", 2.1), fz("card15", 2.2), 62.0, 62.7, wash_k=0.75, sk=0.6), "fade", 0.15),
+    Shot(62.0, kb("card15", fz("card15", 2.1), fz("card15", 2.2), 62.0, 62.7), "fade", 0.15),
     Shot(62.65, kb("card15", fz("card15", 1.75), fzo("card15", 1.82, -10, -5), 62.65, 63.5), "fade", 0.15),
     Shot(63.6, kb("Yoshino SSR2", fzo("Yoshino SSR2", 1.3, 0, 40), fz("Yoshino SSR2", 1.45), 63.6, 65.3), "white", 0.3),
     Shot(65.25, kb("card10", (690, 280, 1.5), (690, 545, 1.5), 65.25, 67.2,  # top-to-bottom reveal, feathers rising
@@ -861,7 +867,7 @@ MONTAGE = [
     Shot(67.95, kb("card5", fzo("card5", 1.3, 0, -20), fzo("card5", 1.3, 0, -20), 67.95, 68.25), "fade", 0.3),
     Shot(68.2, kb("card5", fz("card5", 2.2), fz("card5", 2.3), 68.2, 68.75), "fade", 0.3),
     Shot(68.7, kb("card5", fzo("card5", 1.5, 0, -20), fzo("card5", 1.55, 0, -20), 68.7, 69.25), "fade", 0.2),
-    Shot(69.2, kb("card13", fz("card13", 1.7), fz("card13", 1.75), 69.2, 69.75, wash_k=0.8, sk=0.5), "fade", 0.15),
+    Shot(69.2, kb("card13", fz("card13", 1.7), fz("card13", 1.75), 69.2, 69.75), "fade", 0.15),
     Shot(69.7, kb("card13", fzo("card13", 1.45, 0, 30), fz("card13", 1.6), 69.7, 71.1), "fade", 0.2),
     Shot(71.1, kb("card12", fzo("card12", 1.5, 40, -40), fzo("card12", 1.6, 30, -40), 71.1, 72.85, extra=_notes12),
          "blur", 0.35),
@@ -920,19 +926,39 @@ def snap_cuts(shots, end):
     return shots
 
 
+def lay_rapid(shots, t_from=76.6, t_to=78.8):
+    """The quick-fire run: one card per half beat, back to back."""
+    idx = [k for k, sh in enumerate(shots) if t_from <= sh.t0 <= t_to]
+    j = int(np.argmin(np.abs(EIGHTHS - shots[idx[0]].t0)))
+    for n, k in enumerate(idx):
+        shots[k].t0 = float(EIGHTHS[j + n])
+    return shots
+
+
+def quick_cuts(shots, end, min_len=0.7):
+    """Shots shorter than min_len (or next to one) cut hard instead of cross-fading."""
+    ts = [sh.t0 for sh in shots] + [end]
+    for j in range(1, len(shots)):
+        if min(ts[j] - ts[j - 1], ts[j + 1] - ts[j]) < min_len:
+            shots[j].tin = "cut"
+    return shots
+
+
 MONTAGE = add_punch_ins(snap_cuts(MONTAGE, 78.72), 78.72)
 
 
 def action_shot(t):
-    u = seg(t, 78.72, 79.85)
+    t0 = MONTAGE[-1].t0
+    u = seg(t, t0, 79.85)
     fx, fy = face("card23")
     fr = cover("card23", lerp(700, fx - 60, smooth(u)), lerp(430, fy + 30, smooth(u)), lerp(1.0, 1.18, u))
-    amt = 0.45 * (1 - smooth(seg(t, 78.72, 79.0))) + 0.08
+    amt = 0.45 * (1 - smooth(seg(t, t0, t0 + 0.28))) + 0.08
     fr = zoom_blur(fr, amt * 0.6, n=8)
     return fr
 
 
 MONTAGE.append(Shot(78.72, action_shot, "blur", 0.25))
+MONTAGE = quick_cuts(lay_rapid(MONTAGE), 79.8)
 
 
 # --------------------------------------------------------------------------- segments
@@ -1090,18 +1116,18 @@ def seg_shrine(t):
     return fr
 
 
+GROUP_ZOOM = 1.18
+
+
 def group_frame(t, z):
-    """Backdrop plus the six cut-outs, each drifting slowly upward."""
-    s = max(W / GROUP_W, H / GROUP_H) * z
-    fr = cover("group_bg", GROUP_W / 2, GROUP_H / 2, z)
-    rise = max(0.0, t - 14.0)
-    for name, x, y, sc, v in GROUP_LAYOUT:
-        put(fr, name, W / 2 + (x - GROUP_W / 2) * s, H / 2 + (y - v * rise - GROUP_H / 2) * s, scale=sc * s)
-    return fr
+    """The group picture with the camera tilting slowly from the bottom to the top."""
+    room = GROUP_H / 2 * (1 - 1 / (GROUP_ZOOM * z / 1.0))
+    cy = GROUP_H / 2 + lerp(room, -room, seg(t, 14.0, 20.0))
+    return cover("group", GROUP_W / 2, cy, GROUP_ZOOM * z)
 
 
 def seg_group(t):
-    z = lerp(1.12, 1.0, ease_out(seg(t, 14.0, 16.0))) + 0.03 * seg(t, 16.0, 19.5)
+    z = lerp(1.06, 1.0, ease_out(seg(t, 14.0, 16.0)))
     fr = group_frame(t, z)
     if t < 15.7:
         k = 1 - smooth(seg(t, 14.9, 15.7))
@@ -1235,13 +1261,12 @@ def seg_montage(t):
         return slash_wipe(prev, cur, seg(t, INTRO_END, INTRO_END + 0.38), ang=-62, sk=sk)
     fr = run_shots(MONTAGE, t)
     # white flashes between beats
-    fr = to_white(fr, pulse(t, 54.0, 54.3, 54.5))
-    fr = to_white(fr, pulse(t, 55.4, 55.6, 55.9))
+    fr = to_white(fr, pulse(t, 54.3, 54.5, 54.68) * 0.8)
     if 54.6 < t < 55.05:
         _twinkle(fr, t)
     if 58.1 < t < 58.9:
         u = seg(t, 58.15, 58.8)
-        fr = to_white(fr, pulse(t, 58.1, 58.3, 58.85))
+        fr = to_white(fr, pulse(t, 58.45, 58.72, 58.9) * 0.7)
         for k, (col, ang0) in enumerate((((0.95, 0.3, 0.75), 0.3), ((1.0, 0.82, 0.2), 2.4), ((0.98, 0.5, 0.2), 4.2))):
             r = 60 + 520 * ease_out(u)
             x = W / 2 + math.cos(ang0) * r * 0.9
@@ -1267,8 +1292,9 @@ def seg_waterfall(t):
     fr = to_white(fr, 1 - smooth(seg(t, 79.8, 80.2)))
     if t > 83.35:
         x, y = face("ysn5")
-        cl = cover("ysn5", x + lerp(-20, 20, seg(t, 83.35, 85.0)), y + 40, 2.4)
-        cl = wash(cl, 0.85)
+        ur = smooth(seg(t, 83.35, 85.2))  # slow clockwise turn, drifting toward the bottom-right
+        cl = cover("ysn5", x + lerp(10, -30, ur), y + lerp(50, 20, ur), 2.4 * (1 + 0.05 * ur), lerp(-2.0, 6.0, ur))
+        cl = wash(cl, 0.5)
         cl = to_white(cl, 0.25)
         fr = mix(fr, cl, smooth(seg(t, 83.35, 84.0)))
     fr = to_white(fr, smooth(seg(t, 84.7, 85.15)))
@@ -1285,10 +1311,8 @@ def credit_bg(i, t):
     side = CREDITS[i][0]
     zz = z * (1 + 0.12 * u)
     tx = W * 0.66 if side == "l" else W * 0.34  # face on the side opposite the text
-    ang = lerp(0.0, 4.0, smooth(u)) if i == 0 else 0.0  # page 1 turns slowly clockwise
-    ty = H * 0.45 + (lerp(-15, 30, smooth(u)) if i == 0 else 0.0)
-    cx, cy = face_at(name, zz, tx + lerp(-60, 60, u), ty)
-    fr = cover(name, cx, cy, zz, ang)
+    cx, cy = face_at(name, zz, tx + lerp(-60, 60, u), H * 0.45)
+    fr = cover(name, cx, cy, zz)
     fr = wash(fr, 0.62)
     fr = to_white(fr, 0.18, (1.0, 0.9, 0.95))
     xn, yn = xy_norm()
@@ -1399,9 +1423,7 @@ SEGMENTS = [
 # (start, end, screen-lift, saturation): shots measured darker or more saturated than the rest
 SHOT_CORRECTIONS = [
     (10.45, 11.72, 0.22, 0.85), (13.0, 14.0, 0.22, 0.85),
-(49.65, 51.4, 0.08, 0.8), (52.2, 53.0, 0.04, 0.85),
-    (55.7, 58.2, 0.02, 0.8), (58.75, 60.3, 0.14, 0.75), (72.85, 74.75, 0.22, 0.8),
-    (77.72, 77.97, 0.2, 0.85), (79.8, 83.6, 0.16, 1.0), (5.9, 6.6, 0.0, 0.8),
+(79.8, 83.6, 0.16, 1.0), (5.9, 6.6, 0.0, 0.8),
 ]
 
 
