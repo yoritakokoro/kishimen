@@ -70,6 +70,30 @@ def put(dst, name, x, y, height=None, scale=None, ang=0.0, opacity=1.0, flip=Fal
     return place(dst, name, ax, ay, x, y, scale, ang, opacity, flip)
 
 
+SILHOUETTE = np.float32([0.90, 0.36, 0.62])
+
+
+def put_reveal(dst, name, x, y, scale, opacity, color_u):
+    """Cut-out drawn as a flat pink silhouette that dissolves into full colour (color_u 0..1)."""
+    if opacity <= 0.001:
+        return dst
+    w, h = size_of(name)
+    fx, fy = face(name)
+    lf = to_f(warp_layer(name, fx, fy, x, y, scale))
+    a = lf[..., 3:4]
+    cu = smooth(clamp01(color_u))
+    if cu < 1:  # white rim so the silhouette separates from the pink background
+        rim = cv2.dilate(np.ascontiguousarray(a[..., 0]), np.ones((7, 7), np.uint8))
+        rim = cv2.GaussianBlur(rim, (0, 0), 1.5)[..., None]
+        rl = np.concatenate([rim * np.float32([1.0, 0.96, 0.98]), rim], -1)
+        over(dst, rl, opacity * (1 - cu))
+    sil = a * SILHOUETTE
+    rgb = sil * (1 - cu) + lf[..., :3] * cu
+    # a soft light lift while the colour comes in
+    rgb = np.minimum(rgb + a * 0.25 * pulse(cu, 0.0, 0.35, 1.0), a)
+    return over(dst, np.concatenate([rgb, a], -1), opacity)
+
+
 # --------------------------------------------------------------------------- prepared assets
 
 
@@ -799,7 +823,7 @@ def seg_brand(t):
         u = ease_out(seg(t, 3.95, 4.3))
         out_u = ease_in(seg(t, 4.8, 5.05))
         cl = fr.copy()
-        put(cl, "ysn4", lerp(120, 195, u) + 700 * out_u, 207, scale=0.31)
+        put_reveal(cl, "ysn4", lerp(120, 195, u) + 700 * out_u, 207, 0.31, 1.0, seg(t, 4.087, 4.37))
         fr = mix(fr, cl, smooth(seg(t, 3.95, 4.15)) * (1 - smooth(seg(t, 4.9, 5.05))))
     # vivid squares (5.0 - 6.0)
     if t > 4.85:
@@ -810,7 +834,7 @@ def seg_brand(t):
     if t > 5.9:
         u = ease_out(seg(t, 5.9, 6.3))
         cl = fr.copy()
-        put(cl, "ysn6", lerp(900, 830, u), 207, scale=0.40)
+        put_reveal(cl, "ysn6", lerp(900, 830, u), 207, 0.40, 1.0, seg(t, 6.258, 6.5))
         fr = mix(fr, cl, smooth(seg(t, 5.9, 6.1)))
     lop = smooth(seg(t, 2.3, 2.6))
     if t < 2.6:
@@ -827,11 +851,11 @@ def seg_starring(t):
     squares(base, t, SQ_VIVID, grow=1.1)
     squares(base, t * 0.7, SQ_SOFT, grow=1.3, opacity=0.7)
     u = ease_out(seg(t, 6.95, 7.45))
-    put(base, "tachie4", lerp(40, 240, u), 250, scale=1.7, opacity=u)
+    put_reveal(base, "tachie4", lerp(40, 240, u), 250, 1.7, u, seg(t, 7.256, 7.55))
     u3 = ease_out(seg(t, 8.6, 9.1))
-    put(base, "ysn5", 585, lerp(420, 395, u3), scale=0.32, opacity=u3)
+    put_reveal(base, "ysn5", 585, lerp(420, 395, u3), 0.32, u3, seg(t, 9.009, 9.3))
     u2 = ease_out(seg(t, 7.75, 8.2))
-    put(base, "tachie3", lerp(1020, 830, u2), 560, scale=1.4, opacity=u2)
+    put_reveal(base, "tachie3", lerp(1020, 830, u2), 560, 1.4, u2, seg(t, 8.115, 8.4))
     starring_text(base, t)
     base = to_white(base, 1 - smooth(seg(t, 6.9, 7.1)), (0.99, 0.84, 0.91))
     base = to_white(base, smooth(seg(t, 10.0, 10.45)))
