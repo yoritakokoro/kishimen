@@ -540,8 +540,8 @@ def kb(name, p0, p1, t0, t1, wash_k=0.0, adj=None, ang=0.0, extra=None, sk=0.0):
     """Ken-Burns shot from (cx, cy, zoom) p0 to p1 over [t0, t1]."""
     def render(t):
         u = smooth(seg(t, t0, t1)) * 0.6 + seg(t, t0, t1) * 0.4
-        cx, cy, z = (lerp(a, b, u * 1.5) if i < 2 else lerp(a, b, u) for i, (a, b) in enumerate(zip(p0, p1)))
-        z *= (1 + 0.07 * u) * (1 + 0.08 * (1 - ease_out(seg(t, t0, t0 + 0.4))))
+        cx, cy, z = (lerp(a, b, u * 2.5) if i < 2 else lerp(a, b, u) for i, (a, b) in enumerate(zip(p0, p1)))
+        z *= (1 + 0.20 * u) * (1 + 0.14 * (1 - ease_out(seg(t, t0, t0 + 0.4))))
         fr = cover(name, cx, cy, z, ang)
         if adj:
             fr = adjust(fr, **adj(u))
@@ -894,12 +894,12 @@ def face_at(name, zoom, tx, ty, dx=0.0, dy=0.0):
 def closeup_view(k, tau):
     start, name, z, (dx0, dy0, dx1, dy1), _, side = INTROS[k]
     u = clamp01(tau / (INTRO_LEN[k] + 0.4))
-    zz = z * (1 + 0.06 * u)
+    zz = z * (1 + 0.15 * u)
     pb = next_beat(start + 0.7)
     if pb is not None and start + tau >= pb:
         zz *= 1.12
     tx = W * 0.64 if side == "l" else W * 0.36  # keep the face clear of the standing art
-    cx, cy = face_at(name, zz, tx, H * 0.40, lerp(dx0, dx1, u) * 0.4, lerp(dy0, dy1, u) * 0.4)
+    cx, cy = face_at(name, zz, tx, H * 0.40, lerp(dx0, dx1, u) * 1.2, lerp(dy0, dy1, u) * 1.2)
     return name, cx, cy, zz
 
 
@@ -1006,9 +1006,9 @@ def credit_bg(i, t):
     t0, name, z, (dx, dy) = CREDIT_PAGES[i]
     u = seg(t, t0, t0 + 4.2)
     side = CREDITS[i][0]
-    zz = z * (1 + 0.04 * u)
+    zz = z * (1 + 0.12 * u)
     tx = W * 0.66 if side == "l" else W * 0.34  # face on the side opposite the text
-    cx, cy = face_at(name, zz, tx + lerp(-15, 15, u), H * 0.45)
+    cx, cy = face_at(name, zz, tx + lerp(-60, 60, u), H * 0.45)
     fr = cover(name, cx, cy, zz)
     fr = wash(fr, 0.62)
     fr = to_white(fr, 0.18, (1.0, 0.9, 0.95))
@@ -1101,7 +1101,7 @@ def beat_pulse(fr, t):
     if b is None or t - b > 0.2:
         return fr
     k = (1 - (t - b) / 0.2) ** 2
-    s = 1 + (0.045 if down else 0.022) * k
+    s = 1 + (0.06 if down else 0.03) * k
     fr = cv2.warpAffine(fr, m_place(W / 2, H / 2, W / 2, H / 2, s), (W, H), flags=cv2.INTER_LINEAR,
                         borderMode=cv2.BORDER_REFLECT)
     return to_white(fr, (0.10 if down else 0.05) * k)
@@ -1111,12 +1111,13 @@ def grade(fr, g=1.0):
     """Soft, bright, pastel-pink look: diffusion, glow, lifted blacks, lower contrast and saturation."""
     if g <= 0:
         return fr
-    out = fr * 0.4 + blur(fr, 2.4) * 0.6
-    out = screen(out, blur(out, 16), 0.35)
+    out = fr * 0.68 + blur(fr, 1.8) * 0.32
+    out = screen(out, blur(out, 16), 0.3)
     lum = (out @ np.float32([0.3, 0.59, 0.11]))[..., None]
-    out = lum + (out - lum) * 0.78
-    out = 0.5 + (out - 0.5) * 0.88
-    out = out * 0.93 + 0.07
+    out = lum + (out - lum) * 0.9
+    out = 0.5 + (out - 0.5) * 1.06
+    out = np.clip(out, 0, 1) ** 0.88
+    out = out * 0.95 + 0.05
     out = out * np.float32([1.0, 0.965, 0.975]) + np.float32([0.025, 0.0, 0.012])
     return mix(fr, np.clip(out, 0, 1), g)
 
