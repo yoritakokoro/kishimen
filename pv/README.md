@@ -11,22 +11,25 @@ reference opening movie, with every character shot replaced by Yoshino artwork f
 
 Catch copy: 神さびて　愛らしく――それはひとりの偶像（神様）の物語。
 
+Credits: 企画 こころ / イラスト素材 バンダイナムコ / 映像・エフェクト Claude / プログラム Python /
+Theme song 『true my heart』 ave;new feat.佐倉紗織 (作詞 a.k.a.dRESS & 佐倉紗織, 作曲・編曲 a.k.a.dRESS).
+
 ## Render
 
 ```sh
 pip install pillow numpy opencv-python-headless
 # fonts: M PLUS 2, Noto Serif CJK JP (apt: fonts-mplus fonts-noto-cjk)
 cd pv
-python3 render.py                       # -> out/yoshinon_rhyme_pv.mp4 (1024x768, 30fps, silent)
+python3 render.py                       # -> out/yoshinon_rhyme_pv.mp4 (1024x768, 30fps)
 python3 render.py --sheet 12.9 28.6 99.9 # stills contact sheet -> out/sheet.png
 python3 render.py --from 26 --to 45     # one section
 ```
 
-The video is silent. Its cuts are timed to the reference movie, so you can add your own copy of
-the music with ffmpeg:
+The render is silent. Its cuts follow the reference movie's timing exactly, so you can add the
+audio from your own copy of the original PV with ffmpeg:
 
 ```sh
-ffmpeg -i out/yoshinon_rhyme_pv.mp4 -i <your_audio_source> -map 0:v -map 1:a -c:v copy -c:a aac -shortest out/with_audio.mp4
+ffmpeg -i out/yoshinon_rhyme_pv.mp4 -i <original_pv.mov> -map 0:v -map 1:a -c copy -shortest out/with_audio.mp4
 ```
 
 `build/` is a cache (downscaled assets, cutouts, sketches) and can be deleted at any time.

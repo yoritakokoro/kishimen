@@ -289,7 +289,7 @@ def catch_layer():
                                     stroke_fill=(234, 108, 160), glow=4, glow_col=(255, 150, 196), spacing=3)
     tw = im.size[0] - 2 * pad
     x0 = W / 2 - tw / 2
-    y0 = H * 0.47
+    y0 = H * 0.855  # bottom of frame, below the faces
     canvas = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     canvas.alpha_composite(im, (int(x0 - pad), int(y0 - pad)))
     rw = sum(rwid)
@@ -347,9 +347,10 @@ def name_plate(dst, tau, side):
 
 CREDITS = [
     ("l", [("出演", "依田芳乃"), ("CV", "高田憂希")]),
-    ("r", [("原作", "アイドルマスター シンデレラガールズ"), ("イラスト素材", "カードイラスト・立ち絵 各種")]),
-    ("l", [("企画・素材", "kishimen"), ("背景・エフェクト・文字", "Python によるコード描画")]),
-    ("r", [("スペシャルサンクス", "すべてのプロデューサーさん")]),
+    ("r", [("企画", "こころ"), ("イラスト素材", "バンダイナムコ")]),
+    ("l", [("Theme song", "『true my heart』"), ("歌", "ave;new feat.佐倉紗織"),
+           ("作詞", "a.k.a.dRESS & 佐倉紗織"), ("作曲・編曲", "a.k.a.dRESS (ave;new)")]),
+    ("r", [("映像・エフェクト", "Claude"), ("プログラム", "Python"), ("スペシャルサンクス", "すべてのプロデューサーさん")]),
 ]
 
 
@@ -367,7 +368,7 @@ def credit_page(dst, idx, tau, out_u):
         op = ease_out(u_in) * (1 - out_u)
         text_on(dst, lab, opacity=op, scatter=u_in)
         text_on(dst, val, opacity=op, scatter=u_in)
-        y += 104
+        y += 104 if len(entries) < 4 else 96
         k += 1
     if idx == 3:
         u_in = clamp01((tau - 0.8) / 0.8)
@@ -691,26 +692,24 @@ def seg_brand(t):
     fr = to_white(fr, smooth(seg(t, 3.1, 3.3)))
     if t > 3.3:
         squares(fr, t, SQ_SOFT, grow=lerp(0.7, 1.0, smooth(seg(t, 3.3, 4.0))), opacity=smooth(seg(t, 3.3, 3.9)))
-    # closeup 1 (4.0 - 5.0)
+    # Yoshino 1 (4.0 - 5.0): cut-out at upper left, face clear of the logo
     if 3.95 < t < 5.1:
-        u = seg(t, 3.95, 5.05)
-        fx, fy = face("ysn4")
-        cl = cover("ysn4", fx + lerp(-40, 20, u) + 260 * ease_in(seg(t, 4.8, 5.05)), fy + 60, 2.1 + 0.1 * u)
-        cl = soft_pink(cl, 0.2)
-        squares(cl, t, SQ_SOFT[:2], opacity=0.6)
-        fr = mix(fr, cl, smooth(seg(t, 3.95, 4.15)) * (1 - smooth(seg(t, 4.85, 5.05))))
+        u = ease_out(seg(t, 3.95, 4.3))
+        out_u = ease_in(seg(t, 4.8, 5.05))
+        cl = fr.copy()
+        put(cl, "ysn4", lerp(120, 195, u) + 700 * out_u, 207, scale=0.31)
+        fr = mix(fr, cl, smooth(seg(t, 3.95, 4.15)) * (1 - smooth(seg(t, 4.9, 5.05))))
     # vivid squares (5.0 - 6.0)
     if t > 4.85:
         base = full(0, (0.99, 0.78, 0.87))
         squares(base, t, SQ_VIVID, grow=lerp(0.8, 1.2, seg(t, 4.85, 6.6)))
         fr = mix(fr, base, smooth(seg(t, 4.85, 5.05)))
-    # closeup 2 (6.0 - 6.6)
+    # Yoshino 2 (6.0 - 6.6): cut-out at upper right
     if t > 5.9:
-        fx, fy = face("ysn6")
-        u = seg(t, 5.9, 6.7)
-        cl = cover("ysn6", fx + lerp(30, -20, u), fy + 50, 2.0 + 0.1 * u)
-        cl = wash(cl, 0.35)
-        fr = mix(fr, cl, smooth(seg(t, 5.9, 6.15)))
+        u = ease_out(seg(t, 5.9, 6.3))
+        cl = fr.copy()
+        put(cl, "ysn6", lerp(900, 830, u), 207, scale=0.40)
+        fr = mix(fr, cl, smooth(seg(t, 5.9, 6.1)))
     lop = smooth(seg(t, 2.3, 2.6))
     if t < 2.6:
         sc = lerp(0.9, 0.78, ease_out(seg(t, 2.3, 2.6)))
@@ -843,12 +842,20 @@ INTRO_END = 44.6
 INTRO_LEN = [INTROS[i + 1][0] - INTROS[i][0] for i in range(4)] + [INTRO_END - INTROS[4][0]]
 
 
-def closeup_view(k, tau):
-    start, name, z, (dx0, dy0, dx1, dy1), _, _ = INTROS[k]
-    u = clamp01(tau / (INTRO_LEN[k] + 0.4))
+def face_at(name, zoom, tx, ty, dx=0.0, dy=0.0):
+    """Source centre that puts the face of `name` at screen point (tx, ty) for a cover() view."""
     x, y = face(name)
-    cx, cy = x + lerp(dx0, dx1, u), y + lerp(dy0, dy1, u)
+    w, h = size_of(name)
+    s = max(W / w, H / h) * zoom
+    return x - (tx - W / 2) / s + dx, y - (ty - H / 2) / s + dy
+
+
+def closeup_view(k, tau):
+    start, name, z, (dx0, dy0, dx1, dy1), _, side = INTROS[k]
+    u = clamp01(tau / (INTRO_LEN[k] + 0.4))
     zz = z * (1 + 0.06 * u)
+    tx = W * 0.64 if side == "l" else W * 0.36  # keep the face clear of the standing art
+    cx, cy = face_at(name, zz, tx, H * 0.40, lerp(dx0, dx1, u) * 0.4, lerp(dy0, dy1, u) * 0.4)
     return name, cx, cy, zz
 
 
@@ -871,7 +878,7 @@ def intro_frame(k, t):
         halftone(fr, np.clip((yn - 0.72) / 0.28, 0, 1) * ht, (0.98, 0.62, 0.78), 0.5, cell=16, ang=30, square=False)
     tu = ease_out(clamp01((tau - 1.45) / 0.45))
     if tu > 0:
-        tx = W * 0.24 if side == "l" else W * 0.76
+        tx = W * 0.20 if side == "l" else W * 0.80
         off = (1 - tu) * (-160 if side == "l" else 160)
         w, h = size_of(tachie)
         fx = face(tachie)[0] if tachie in CUT_FACE else 0.45 * w
@@ -954,9 +961,11 @@ CREDIT_PAGES = [(85.2, "card17", 1.25, (0, 40)), (89.0, "card20", 1.3, (0, 60)),
 def credit_bg(i, t):
     t0, name, z, (dx, dy) = CREDIT_PAGES[i]
     u = seg(t, t0, t0 + 4.2)
-    x, y = face(name)
     side = CREDITS[i][0]
-    fr = cover(name, x + dx + (lerp(-30, 30, u) if side == "l" else lerp(30, -30, u)), y + dy, z * (1 + 0.04 * u))
+    zz = z * (1 + 0.04 * u)
+    tx = W * 0.66 if side == "l" else W * 0.34  # face on the side opposite the text
+    cx, cy = face_at(name, zz, tx + lerp(-15, 15, u), H * 0.45)
+    fr = cover(name, cx, cy, zz)
     fr = wash(fr, 0.62)
     fr = to_white(fr, 0.18, (1.0, 0.9, 0.95))
     xn, yn = xy_norm()
