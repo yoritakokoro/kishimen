@@ -1005,7 +1005,7 @@ def seg_opening(t):
     starts = [o[-1] for o in OPEN_SKETCHES] + [OPEN_END]
     for i, (name, x, y, sc, a0, a1, ddx, ddy, col, tb) in enumerate(OPEN_SKETCHES):
         te = starts[i + 1]
-        if t < tb or t > te + 0.12:
+        if t < tb or t > te + 0.07:
             continue
         u = seg(t, tb, te)
         if name in CARD_FACE:  # card art: scale relative to cover size
@@ -1014,11 +1014,10 @@ def seg_opening(t):
         else:
             s = sc
         fx, fy = face(name)
-        dx = x * W + ddx * ease_out(u)
-        dy = y * H + ddy * ease_out(u)
-        rv = lerp(0, 1400, ease_out(seg(t, tb, tb + 0.16)))
-        op = smooth(seg(t, tb, tb + 0.05)) * (1 - smooth(seg(t, te - 0.04, te + 0.12)))
-        sketch_tinted(fr, name, fx, fy, dx, dy, s * (1 + 0.06 * u), lerp(a0, a1, ease_out(u)), col, op, reveal=rv)
+        # quick, slight zoom on arrival, then a quick fade-out
+        zoom = 1.0 + 0.05 * ease_out(seg(t, tb, tb + 0.2)) + 0.015 * u
+        op = smooth(seg(t, tb, tb + 0.04)) * (1 - smooth(seg(t, te - 0.03, te + 0.07)))
+        sketch_tinted(fr, name, fx, fy, x * W, y * H, s * zoom, a0, col, op)
     fr = to_white(fr, pulse(t, 2.15, 2.27, 2.5) * 0.85)
     return fr
 
