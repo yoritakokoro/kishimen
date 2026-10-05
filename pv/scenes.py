@@ -1170,23 +1170,6 @@ def shot_correct(fr, t):
     return fr
 
 
-PULSE_RANGES = ((7.0, 10.0), (20.8, 25.8), (26.6, 79.6), (85.6, 98.7))
-
-
-def beat_pulse(fr, t):
-    """Small zoom bump and lift on every beat (bigger on downbeats)."""
-    if not any(a < t < b for a, b in PULSE_RANGES):
-        return fr
-    b, down = last_beat(t)
-    if b is None or t - b > 0.2:
-        return fr
-    k = (1 - (t - b) / 0.2) ** 2
-    s = 1 + (0.06 if down else 0.03) * k
-    fr = cv2.warpAffine(fr, m_place(W / 2, H / 2, W / 2, H / 2, s), (W, H), flags=cv2.INTER_LINEAR,
-                        borderMode=cv2.BORDER_REFLECT)
-    return to_white(fr, (0.10 if down else 0.05) * k)
-
-
 def grade(fr, g=1.0):
     """Soft, bright, pastel-pink look: diffusion, glow, lifted blacks, lower contrast and saturation."""
     if g <= 0:
@@ -1217,6 +1200,5 @@ def render(t):
     fr = fn(t)
     fr = catchcopy(fr, t)
     fr = shot_correct(np.clip(fr, 0, 1), t)
-    fr = beat_pulse(fr, t)
     fr = grade(fr, grade_amount(t))
     return np.clip(fr, 0, 1)
