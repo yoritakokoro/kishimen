@@ -445,6 +445,32 @@ def catchcopy(dst, t):
     return dst
 
 
+NAME_SQ_COLS = [np.float32(YOSHINO_COLOR) / 255 * 0.92, np.float32([0.94, 0.52, 0.71])]
+
+
+def name_squares(dst, tau, xs, widths, side):
+    """One square behind each character of the name: each rolls in from the outer edge, then keeps turning."""
+    size = 124.0
+    cy0 = H * 0.735 + 56
+    sgn = 1 if side == "r" else -1  # roll in from the screen edge on the plate's side
+    for i, (gx, gw) in enumerate(zip(xs, widths)):
+        u = clamp01((tau + 0.1 - i * 0.07) / 0.38)
+        if u <= 0:
+            continue
+        e = ease_out(u)
+        dist = (1 - e) * 260.0
+        cx = gx + gw / 2 + sgn * dist
+        cy = cy0 + (12 if i % 2 else -12)
+        # rolling: rotation follows the distance travelled, then a slow spin once settled
+        spin = (1 if i % 2 == 0 else -1) * 18.0 * max(0.0, tau - 0.4)
+        ang = 45.0 + math.degrees(dist / (size / 2)) * sgn + spin
+        col = NAME_SQ_COLS[i % 2]
+        op = smooth(clamp01(u * 2.5)) * 0.95
+        fill_mask(dst, poly_mask([square_poly(cx, cy, size + 8, ang)]), (1.0, 1.0, 1.0), op)
+        fill_mask(dst, poly_mask([square_poly(cx, cy, size, ang)]), col, op)
+    return dst
+
+
 def name_plate(dst, tau, side):
     """Name plate for the character intros; side='r' puts it bottom-right."""
     if tau < 0:
@@ -454,6 +480,7 @@ def name_plate(dst, tau, side):
                       fill=YOSHINO_COLOR, stroke=8, stroke_fill=(255, 255, 255), outer=(3, YOSHINO_DARK),
                       glow=6, glow_col=(90, 78, 72), glow_k=0.45, spacing=2)
     lay, xs, widths = info
+    name_squares(dst, tau, xs, widths, side)
     lf = to_f(lay)
     out = np.zeros_like(lf)
     # contiguous, non-overlapping slices so each glyph (with its stroke) is animated exactly once
@@ -1099,7 +1126,7 @@ def intro_frame(k, t):
         place(fr, tachie, fx, 0, tx + off, 6, 0.98, 0, tu)
         if tu < 1:
             place(fr, tachie, fx, 0, tx + off * 2.2, 6, 0.98, 0, (1 - tu) * 0.35)
-    petal_shower(fr, tau, n=56, seed=100 + k)  # each new CG brings a fall of petals
+    petal_shower(fr, tau, n=24, seed=100 + k)  # each new CG brings a fall of petals
     name_plate(fr, tau - entry - 0.15, "r" if side == "l" else "l")
     if k == 0:
         fr = to_white(fr, 1 - smooth(seg(t, 26.5, 27.05)))
