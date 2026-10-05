@@ -194,7 +194,7 @@ def prepare():
                     ("action", compose_action)):
         if not (BUILD / f"{key}.npy").exists():
             register(key, fn())
-    for name in ("ysn3", "ysn2", "ysn5", "card10", "card15", "card13", "Yoshino SSR1", "Yoshino SSR2", "Yoshino SSR3",
+    for name in ("ysn3", "ysn2", "ysn5", "ysn1", "card10", "card15", "card13", "Yoshino SSR1", "Yoshino SSR2", "Yoshino SSR3",
                  "Yoshino SSR4", "Yoshino SSR5", "card9", "group"):
         sketch(name)
 
@@ -207,6 +207,20 @@ def checker():
     a = img("haikei").astype(np.float32) / 255.0
     tile = np.concatenate([a[..., :3], a[..., :3]], axis=1)
     return cv2.resize(tile, (W, H), interpolation=cv2.INTER_AREA)
+
+
+CHECKER_SPEED = 40.0  # px/s, the checker background rises
+
+
+def checker_at(t, boost=1.0):
+    """The pink checker asset scrolling upward; boost > 1 strengthens its (very pale) pattern."""
+    off = (t * CHECKER_SPEED) % H
+    c = cv2.warpAffine(checker(), np.float32([[1, 0, 0], [0, 1, -off]]), (W, H), flags=cv2.INTER_LINEAR,
+                       borderMode=cv2.BORDER_WRAP)
+    if boost != 1.0:
+        m = np.float32([0.97, 0.93, 0.95])
+        c = np.clip(m + (c - m) * boost, 0, 1)
+    return c
 
 
 FLARE = None
@@ -833,41 +847,41 @@ def sketch_tinted(dst, name, fx, fy, dx, dy, scale, ang, color, opacity, reveal=
     return over(dst, col, opacity)
 
 
-# opening line-art layers: (asset, screen x, y, scale, angle0, angle1, drift dx, dy, colour, start beat)
-OPEN_SKETCHES = [  # scale: absolute for cut-outs, relative to cover size for card art
-    ("ysn3", 0.40, 0.46, 0.51, -7, -3, 70, -20, (0.84, 0.30, 0.78), 0.894),
-    ("Yoshino SSR4", 0.73, 0.36, 1.55, 6, 3, -60, 10, (0.95, 0.40, 0.66), 1.347),
-    ("ysn2", 0.36, 0.52, 0.52, -10, -6, 50, -30, (0.70, 0.42, 0.90), 1.858),
+# opening line-art: one sketch per half beat, each replacing the previous
+# (asset, face x, face y as frame fraction, scale, angle from -> to, drift dx, dy, colour, start)
+OPEN_SKETCHES = [
+    ("ysn3", 0.42, 0.45, 0.51, -6, -2, 60, -14, (0.84, 0.30, 0.78), 0.894),
+    ("Yoshino SSR4", 0.62, 0.40, 1.5, 5, 2, -70, 8, (0.95, 0.40, 0.66), 1.120),
+    ("ysn2", 0.38, 0.50, 0.52, -9, -5, 50, -24, (0.70, 0.42, 0.90), 1.347),
+    ("ysn5", 0.60, 0.42, 0.56, 4, 1, -60, -10, (0.90, 0.34, 0.72), 1.603),
+    ("ysn1", 0.45, 0.46, 0.55, -4, 0, 40, 10, (0.86, 0.38, 0.80), 1.858),
 ]
+OPEN_END = 2.6
 
 
 def seg_opening(t):
     if t < 0.35:
         return full(0.0)
-    if t < 0.95:
-        u = seg(t, 0.35, 0.95)
-        return full(smooth(u) ** 1.4)
-    fr = to_white(checker().copy(), 0.45)
-    n = len(OPEN_SKETCHES)
+    if t < 0.9:
+        return full(smooth(seg(t, 0.35, 0.9)) ** 1.4)
+    fr = to_white(checker_at(t), 0.45)
+    starts = [o[-1] for o in OPEN_SKETCHES] + [OPEN_END]
     for i, (name, x, y, sc, a0, a1, ddx, ddy, col, tb) in enumerate(OPEN_SKETCHES):
-        if t < tb:
+        te = starts[i + 1]
+        if t < tb or t > te + 0.07:
             continue
-        u = seg(t, tb, 2.6)
-        fx, fy = face(name)
-        if name in CARD_FACE:
+        u = seg(t, tb, te)
+        if name in CARD_FACE:  # card art: scale relative to cover size
             w, h = size_of(name)
             s = max(W / w, H / h) * sc
         else:
             s = sc
+        fx, fy = face(name)
         dx = x * W + ddx * ease_out(u)
         dy = y * H + ddy * ease_out(u)
-        # later layers push the earlier ones back
-        later = [ob[-1] for ob in OPEN_SKETCHES[i + 1:] if t >= ob[-1]]
-        dim = 0.32 ** len(later)
-        rv = lerp(0, 1400, ease_out(seg(t, tb, tb + 0.35)))
-        op = smooth(seg(t, tb, tb + 0.12)) * dim
-        sketch_tinted(fr, name, fx, fy, dx, dy, s * (1 + 0.05 * u), lerp(a0, a1, u), col, op, reveal=rv)
-    # clear on the beat where the logo arrives
+        rv = lerp(0, 1400, ease_out(seg(t, tb, tb + 0.16)))
+        op = smooth(seg(t, tb, tb + 0.05)) * (1 - seg(t, te, te + 0.07))
+        sketch_tinted(fr, name, fx, fy, dx, dy, s * (1 + 0.06 * u), lerp(a0, a1, ease_out(u)), col, op, reveal=rv)
     fr = to_white(fr, pulse(t, 2.15, 2.27, 2.5) * 0.85)
     return fr
 
@@ -888,10 +902,10 @@ def seg_brand(t):
     if t < 2.6:
         fr = seg_opening(t)
         fr = to_white(fr, seg(t, 2.3, 2.6) * 0.5)
-        base = to_white(checker().copy(), 0.25)
+        base = to_white(checker_at(t), 0.25)
         fr = mix(fr, base, smooth(seg(t, 2.3, 2.6)))
     else:
-        fr = to_white(checker().copy(), 0.25)
+        fr = to_white(checker_at(t), 0.25)
     # white then soft squares (3.15-4.0)
     fr = to_white(fr, smooth(seg(t, 3.1, 3.3)))
     if t > 3.3:
@@ -920,7 +934,6 @@ def seg_brand(t):
     else:
         sc = 0.78
     brand_logo(fr, lop, t, sc, tag_t0=2.5)
-    fr = to_white(fr, smooth(seg(t, 6.5, 6.85)), (0.99, 0.84, 0.91))
     return fr
 
 
@@ -928,14 +941,10 @@ def seg_starring(t):
     base = full(0, (0.99, 0.80, 0.88))
     squares(base, t, SQ_VIVID, grow=1.1)
     squares(base, t * 0.7, SQ_SOFT, grow=1.3, opacity=0.7)
-    u = ease_out(seg(t, 6.95, 7.45))
-    put_reveal(base, "tachie4", lerp(40, 240, u), 250, 1.7, u, seg(t, 7.256, 7.55))
-    u3 = ease_out(seg(t, 8.6, 9.1))
-    put_reveal(base, "ysn5", 585, lerp(420, 395, u3), 0.32, u3, seg(t, 9.009, 9.3))
-    u2 = ease_out(seg(t, 7.75, 8.2))
-    put_reveal(base, "tachie3", lerp(1020, 830, u2), 560, 1.4, u2, seg(t, 8.115, 8.4))
+    for name, x, y, sc, t0 in (("tachie4", 240, 250, 1.7, 6.85), ("ysn5", 585, 395, 0.32, 7.15),
+                               ("tachie3", 830, 560, 1.4, 7.0)):
+        put(base, name, x, y, scale=sc, opacity=smooth(seg(t, t0, t0 + 0.45)))
     starring_text(base, t)
-    base = to_white(base, 1 - smooth(seg(t, 6.9, 7.1)), (0.99, 0.84, 0.91))
     base = to_white(base, smooth(seg(t, 10.0, 10.45)))
     return base
 
@@ -1012,7 +1021,7 @@ def seg_group(t):
 
 
 def seg_title(t):
-    fr = to_white(checker().copy(), 0.15)
+    fr = checker_at(t, 2.4)
     sq = smooth(seg(t, 22.8, 24.0))
     if sq > 0:
         squares(fr, t, SQ_SOFT, grow=lerp(0.5, 1.25, seg(t, 22.8, 26.0)), opacity=sq)
@@ -1217,8 +1226,7 @@ def seg_finale(t):
                    bright=0.2 * (1 - seg(t, 100.5, 101.0)), glow=1.2 - 0.8 * seg(t, 100.5, 101.0))
         fr = zoom_blur(fr, 0.4 * hit)
         return fr
-    fr = full(0, (1.0, 0.94, 0.97))
-    fr = to_white(fr, smooth(seg(t, 103.9, 104.3)))
+    fr = checker_at(t, 2.4)
     if t < 101.62:
         title_logo(fr, st=0.84, glow=0.25)
     elif t < 101.8:
@@ -1244,8 +1252,36 @@ def seg_end(t):
     return fr
 
 
+FAN = (6.33, 6.79)
+FAN_BAND = 28.0  # degrees of pink ribs behind the leading edge
+FAN_RIBS = (np.float32([1.0, 0.74, 0.86]), np.float32([0.96, 0.56, 0.75]))
+
+
+def fan_wipe(A, B, u):
+    """A folding fan opening from below the frame, left to right; its pink ribs sweep A away to reveal B."""
+    cx, cy = W / 2, H + 30
+    xn, yn = xy_norm()
+    ang = np.degrees(np.arctan2(cy - yn * H, xn * W - cx))
+    theta = lerp(185.0, -FAN_BAND - 5.0, smooth(u))
+    d = ang - theta  # > 0: already swept
+    wA = np.clip(-d / 1.2 + 0.5, 0, 1)[..., None]
+    wB = np.clip((d - FAN_BAND) / 1.2 + 0.5, 0, 1)[..., None]
+    wP = np.clip(1 - wA - wB, 0, 1)
+    rib = (np.floor(np.clip(d, 0, FAN_BAND) / 4.0) % 2)[..., None]
+    pink = FAN_RIBS[0] * (1 - rib) + FAN_RIBS[1] * rib
+    r = np.sqrt((xn * W - cx) ** 2 + (yn * H - cy) ** 2)[..., None]
+    pink = pink + (1 - pink) * np.clip((r - 300) / 900, 0, 1) * 0.35  # paler towards the outer edge
+    out = A * wA + B * wB + pink * wP
+    edge = np.exp(-(d / 0.9) ** 2)[..., None]
+    return to_white_arr(out, edge * 0.7)
+
+
+def to_white_arr(rgb, k):
+    return rgb * (1 - k) + k
+
+
 SEGMENTS = [
-    (0.0, seg_opening), (2.3, seg_brand), (6.9, seg_starring), (10.45, seg_shrine), (14.0, seg_group),
+    (0.0, seg_opening), (2.3, seg_brand), (FAN[1], seg_starring), (10.45, seg_shrine), (14.0, seg_group),
     (20.0, seg_title), (26.5, seg_intros), (INTRO_END, seg_montage), (79.8, seg_waterfall), (85.2, seg_credits),
     (99.1, seg_finale), (107.75, seg_end),
 ]
@@ -1299,7 +1335,10 @@ def render(t):
     for t0, f in SEGMENTS:
         if t >= t0:
             fn = f
-    fr = fn(t)
+    if FAN[0] <= t < FAN[1]:
+        fr = fan_wipe(seg_brand(t), seg_starring(t), seg(t, *FAN))
+    else:
+        fr = fn(t)
     fr = catchcopy(fr, t)
     fr = shot_correct(np.clip(fr, 0, 1), t)
     fr = grade(fr, grade_amount(t))
