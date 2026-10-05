@@ -16,6 +16,25 @@ from common import _premul
 
 DURATION = 114.47
 
+import json
+from pathlib import Path
+
+_BEATS = json.load(open(Path(__file__).resolve().parent / "beats.json"))
+BEAT_T = np.array(_BEATS["beats"], np.float64)
+DOWNBEAT = _BEATS["downbeat_offset"]
+
+
+def last_beat(t):
+    i = int(np.searchsorted(BEAT_T, t, "right")) - 1
+    if i < 0:
+        return None, False
+    return float(BEAT_T[i]), (i - DOWNBEAT) % 4 == 0
+
+
+def next_beat(t):
+    i = int(np.searchsorted(BEAT_T, t, "left"))
+    return float(BEAT_T[i]) if i < len(BEAT_T) else None
+
 # --------------------------------------------------------------------------- face anchors (source px)
 CARD_FACE = {
     "card1": (610, 370), "card2": (500, 360), "card3": (580, 440), "card4": (630, 450), "card5": (660, 540),
@@ -521,7 +540,8 @@ def kb(name, p0, p1, t0, t1, wash_k=0.0, adj=None, ang=0.0, extra=None, sk=0.0):
     """Ken-Burns shot from (cx, cy, zoom) p0 to p1 over [t0, t1]."""
     def render(t):
         u = smooth(seg(t, t0, t1)) * 0.6 + seg(t, t0, t1) * 0.4
-        cx, cy, z = (lerp(a, b, u) for a, b in zip(p0, p1))
+        cx, cy, z = (lerp(a, b, u * 1.5) if i < 2 else lerp(a, b, u) for i, (a, b) in enumerate(zip(p0, p1)))
+        z *= (1 + 0.07 * u) * (1 + 0.08 * (1 - ease_out(seg(t, t0, t0 + 0.4))))
         fr = cover(name, cx, cy, z, ang)
         if adj:
             fr = adjust(fr, **adj(u))
@@ -539,6 +559,7 @@ def kb(name, p0, p1, t0, t1, wash_k=0.0, adj=None, ang=0.0, extra=None, sk=0.0):
         if extra:
             extra(fr, t)
         return fr
+    render.params = (name, p0, p1, t0, t1, wash_k, adj, ang, extra, sk)
     return render
 
 
@@ -635,6 +656,29 @@ MONTAGE = [
     Shot(78.22, kb("Yoshino SSR4", fz("Yoshino SSR4", 1.8), fz("Yoshino SSR4", 2.1), 78.22, 78.47)),
     Shot(78.47, kb("card8", fz("card8", 2.2), fz("card8", 2.5), 78.47, 78.72)),
 ]
+
+
+def add_punch_ins(shots, end):
+    """Insert a tighter framing of the same card on a beat in the middle of each long shot."""
+    out = []
+    for i, sh in enumerate(shots):
+        out.append(sh)
+        t1 = shots[i + 1].t0 if i + 1 < len(shots) else end
+        params = getattr(sh.render, "params", None)
+        if params is None or t1 - sh.t0 < 1.3:
+            continue
+        cands = [float(b) for b in BEAT_T if sh.t0 + 0.6 < b < t1 - 0.45]
+        if not cands:
+            continue
+        b = cands[len(cands) // 2]
+        name, p0, p1, _, _, wash_k, adj, ang, extra, sk = params
+        z = max(p0[2], p1[2]) * 1.32
+        fx, fy = face(name)
+        out.append(Shot(b, kb(name, (fx, fy, z), (fx, fy - 6, z * 1.05), b, t1, wash_k, adj, ang, extra, sk)))
+    return out
+
+
+MONTAGE = add_punch_ins(MONTAGE, 78.72)
 
 
 def action_shot(t):
@@ -851,6 +895,9 @@ def closeup_view(k, tau):
     start, name, z, (dx0, dy0, dx1, dy1), _, side = INTROS[k]
     u = clamp01(tau / (INTRO_LEN[k] + 0.4))
     zz = z * (1 + 0.06 * u)
+    pb = next_beat(start + 0.7)
+    if pb is not None and start + tau >= pb:
+        zz *= 1.12
     tx = W * 0.64 if side == "l" else W * 0.36  # keep the face clear of the standing art
     cx, cy = face_at(name, zz, tx, H * 0.40, lerp(dx0, dx1, u) * 0.4, lerp(dy0, dy1, u) * 0.4)
     return name, cx, cy, zz
@@ -1043,6 +1090,44 @@ SEGMENTS = [
 ]
 
 
+PULSE_RANGES = ((7.0, 10.0), (20.8, 25.8), (26.6, 79.6), (85.6, 98.7))
+
+
+def beat_pulse(fr, t):
+    """Small zoom bump and lift on every beat (bigger on downbeats)."""
+    if not any(a < t < b for a, b in PULSE_RANGES):
+        return fr
+    b, down = last_beat(t)
+    if b is None or t - b > 0.2:
+        return fr
+    k = (1 - (t - b) / 0.2) ** 2
+    s = 1 + (0.045 if down else 0.022) * k
+    fr = cv2.warpAffine(fr, m_place(W / 2, H / 2, W / 2, H / 2, s), (W, H), flags=cv2.INTER_LINEAR,
+                        borderMode=cv2.BORDER_REFLECT)
+    return to_white(fr, (0.10 if down else 0.05) * k)
+
+
+def grade(fr, g=1.0):
+    """Soft, bright, pastel-pink look: diffusion, glow, lifted blacks, lower contrast and saturation."""
+    if g <= 0:
+        return fr
+    out = fr * 0.4 + blur(fr, 2.4) * 0.6
+    out = screen(out, blur(out, 16), 0.35)
+    lum = (out @ np.float32([0.3, 0.59, 0.11]))[..., None]
+    out = lum + (out - lum) * 0.78
+    out = 0.5 + (out - 0.5) * 0.88
+    out = out * 0.93 + 0.07
+    out = out * np.float32([1.0, 0.965, 0.975]) + np.float32([0.025, 0.0, 0.012])
+    return mix(fr, np.clip(out, 0, 1), g)
+
+
+def grade_amount(t):
+    g = smooth(seg(t, 0.5, 1.0)) * (1 - smooth(seg(t, 113.15, 113.6)))
+    if 99.3 < t < 100.75:
+        g *= 0.35
+    return g
+
+
 def render(t):
     fn = SEGMENTS[0][1]
     for t0, f in SEGMENTS:
@@ -1050,5 +1135,6 @@ def render(t):
             fn = f
     fr = fn(t)
     fr = catchcopy(fr, t)
-    fr = bloom(np.clip(fr, 0, 1), k=0.16)
+    fr = beat_pulse(np.clip(fr, 0, 1), t)
+    fr = grade(fr, grade_amount(t))
     return np.clip(fr, 0, 1)
