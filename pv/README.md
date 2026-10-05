@@ -23,7 +23,11 @@ cd pv
 python3 render.py                       # -> out/yoshinon_rhyme_pv.mp4 (1024x768, 30fps)
 python3 render.py --sheet 12.9 28.6 99.9 # stills contact sheet -> out/sheet.png
 python3 render.py --from 26 --to 45     # one section
+python3 render.py --lossless --out master.mkv   # lossless RGB master for high-quality encodes
 ```
+
+`out/yoshinon_rhyme_pv_hq.mp4` is the high-quality copy (x264 veryslow, CRF 10, ~93 MB),
+encoded from the lossless master; `out/yoshinon_rhyme_pv.mp4` is the standard CRF 17 render.
 
 The render is silent. Its cuts follow the reference movie's timing exactly, so you can add the
 audio from your own copy of the original PV with ffmpeg:
