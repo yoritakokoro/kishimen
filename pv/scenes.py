@@ -1199,9 +1199,6 @@ def closeup_view(k, tau):
     start, name, z, (dx0, dy0, dx1, dy1), _, side = INTROS[k]
     u = clamp01(tau / (INTRO_LEN[k] + 0.4))
     zz = z * (1 + 0.15 * u)
-    pb = next_beat(start + 0.7)
-    if pb is not None and start + tau >= pb:
-        zz *= 1.12
     tx = W * 0.64 if side == "l" else W * 0.36  # keep the face clear of the standing art
     cx, cy = face_at(name, zz, tx, H * 0.40, lerp(dx0, dx1, u) * 1.2, lerp(dy0, dy1, u) * 1.2)
     return name, cx, cy, zz
