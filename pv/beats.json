@@ -259,5 +259,10 @@
 113.476,
 113.929
 ],
-"downbeat_offset": 2
+"downbeat_offset": 2,
+"grid_44_80": {
+"period": 0.4444,
+"phase": 0.2575,
+"note": "constant-tempo beat grid fitted to the reference audio onsets, 44-80 s"
+}
 }

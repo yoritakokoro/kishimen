@@ -40,7 +40,8 @@ CARD_FACE = {
     "card6": (690, 370), "card7": (530, 380), "card8": (330, 450), "card9": (590, 410), "card10": (690, 330),
     "card11": (580, 490), "card12": (600, 560), "card13": (590, 370), "card15": (670, 380), "card16": (580, 390),
     "card17": (720, 370), "card18": (440, 430), "card19": (430, 470), "card20": (580, 340), "card21": (600, 310),
-    "card22": (630, 350), "card23": (890, 370), "card24": (565, 390), "card25": (505, 345),
+    "card22": (630, 350), "card23": (890, 370), "card24": (565, 390), "card25": (505, 345), "card26": (665, 330),
+    "card27": (840, 470), "card28": (700, 450), "card29": (550, 400), "card30": (820, 470), "card31": (565, 490),
     "Yoshino SSR1": (650, 370), "Yoshino SSR2": (680, 420), "Yoshino SSR3": (620, 365), "Yoshino SSR4": (630, 330),
     "Yoshino SSR5": (360, 320),
 }
@@ -48,7 +49,7 @@ CUT_FACE = {  # fraction of image size
     "tachie1": (0.54, 0.29), "tachie2": (0.476, 0.318), "tachie3": (0.427, 0.286), "tachie4": (0.52, 0.30),
     "tachie5": (0.367, 0.266), "tachie8": (0.416, 0.30), "tachie9": (0.47, 0.32),
     "tachie10": (0.52, 0.31), "tachie11": (0.65, 0.30), "tachie12": (0.39, 0.36), "tachie13": (0.50, 0.29),
-    "tachie14": (0.60, 0.30),
+    "tachie14": (0.60, 0.30), "tachie15": (0.56, 0.24), "tachie16": (0.50, 0.345),
     "ysn1": (0.49, 0.353), "ysn2": (0.51, 0.155), "ysn3": (0.568, 0.256), "ysn4": (0.495, 0.26), "ysn5": (0.488, 0.209),
     "ysn6": (0.423, 0.297),
 }
@@ -690,9 +691,10 @@ def transition(A, B, u, kind):
 def kb(name, p0, p1, t0, t1, wash_k=0.0, adj=None, ang=0.0, extra=None, sk=0.0):
     """Ken-Burns shot from (cx, cy, zoom) p0 to p1 over [t0, t1]."""
     def render(t):
-        u = smooth(seg(t, t0, t1)) * 0.6 + seg(t, t0, t1) * 0.4
-        cx, cy, z = (lerp(a, b, u * 2.5) if i < 2 else lerp(a, b, u) for i, (a, b) in enumerate(zip(p0, p1)))
-        z *= (1 + 0.20 * u) * (1 + 0.14 * (1 - ease_out(seg(t, t0, t0 + 0.4))))
+        lin = seg(t, t0, t1)
+        u = smooth(lin) * 0.5 + lin * 0.5  # keeps moving through the shot, eased at both ends
+        cx, cy = lerp(p0[0], p1[0], u * 1.5), lerp(p0[1], p1[1], u * 1.5)
+        z = lerp(p0[2], p1[2], u) * (1 + 0.10 * u) * (1 + 0.04 * (1 - ease_out(seg(t, t0, t0 + 0.3))))
         fr = cover(name, cx, cy, z, ang)
         if adj:
             fr = adjust(fr, **adj(u))
@@ -739,7 +741,7 @@ def run_shots(shots, t):
     for j in (i, i + 1):
         if 0 < j < len(shots):
             s = shots[j]
-            a = s.t0 - s.tdur / 2
+            a = s.t0 - s.tdur * {"fade": 0.75, "wipe": 1.0}.get(s.tin, 0.5)
             if s.tin != "cut" and s.tdur > 0 and a <= t < a + s.tdur:
                 return transition(shots[j - 1].render(t), s.render(t), (t - a) / s.tdur, s.tin)
     return shots[i].render(t)
@@ -885,14 +887,14 @@ MONTAGE = [
     Shot(72.85, kb("card25", fzo("card25", 1.6, 0, 20), fzo("card25", 1.72, -10, 10), 72.85, 74.6), "blur", 0.35),
     Shot(74.5, kb("card2", fzo("card2", 1.45, 0, 30), fz("card2", 1.6), 74.5, 76.25), "wipe", 0.35),
     Shot(76.2, kb("card2", fz("card2", 2.4), fzo("card2", 2.5, 0, -6), 76.2, 76.75), "fade", 0.2),
-    Shot(76.72, kb("card17", fz("card17", 2.3), fzo("card17", 2.6, 10, 0), 76.72, 76.97)),
-    Shot(76.97, kb("card6", fz("card6", 1.9), fzo("card6", 2.1, -10, 0), 76.97, 77.22)),
-    Shot(77.22, kb("card19", fzo("card19", 1.7, 40, 20), fzo("card19", 1.8, 40, 20), 77.22, 77.47)),
-    Shot(77.47, kb("card20", fz("card20", 2.0), fzo("card20", 2.15, 0, -6), 77.47, 77.72)),
-    Shot(77.72, kb("card22", fz("card22", 2.1), fz("card22", 2.3), 77.72, 77.97)),
-    Shot(77.97, kb("card3", fz("card3", 2.0), fzo("card3", 2.3, 10, 0), 77.97, 78.22)),
-    Shot(78.22, kb("Yoshino SSR4", fz("Yoshino SSR4", 1.8), fz("Yoshino SSR4", 2.1), 78.22, 78.47)),
-    Shot(78.47, kb("card8", fz("card8", 2.2), fz("card8", 2.5), 78.47, 78.72)),
+    Shot(76.72, kb("card30", fz("card30", 2.0), fz("card30", 2.06), 76.72, 76.97)),
+    Shot(76.97, kb("card6", fz("card6", 1.9), fz("card6", 1.96), 76.97, 77.22)),
+    Shot(77.22, kb("card19", fzo("card19", 1.7, 40, 20), fzo("card19", 1.75, 40, 20), 77.22, 77.47)),
+    Shot(77.47, kb("card31", fz("card31", 2.0), fz("card31", 2.06), 77.47, 77.72)),
+    Shot(77.72, kb("card26", fz("card26", 2.0), fz("card26", 2.06), 77.72, 77.97)),
+    Shot(77.97, kb("card3", fz("card3", 2.0), fz("card3", 2.06), 77.97, 78.22)),
+    Shot(78.22, kb("Yoshino SSR4", fz("Yoshino SSR4", 1.8), fz("Yoshino SSR4", 1.85), 78.22, 78.47)),
+    Shot(78.47, kb("card8", fz("card8", 2.2), fz("card8", 2.27), 78.47, 78.72)),
 ]
 
 
@@ -905,12 +907,12 @@ def add_punch_ins(shots, end):
         params = getattr(sh.render, "params", None)
         if params is None or sh.no_punch or t1 - sh.t0 < 1.3:
             continue
-        cands = [float(b) for b in BEAT_T if sh.t0 + 0.6 < b < t1 - 0.45]
+        cands = [float(b) for b in MBEATS if sh.t0 + 0.6 < b < t1 - 0.45]
         if not cands:
             continue
         b = cands[len(cands) // 2]
         name, p0, p1, _, _, wash_k, adj, ang, extra, sk = params
-        z = max(p0[2], p1[2]) * 1.32
+        z = max(p0[2], p1[2]) * 1.2
         fx, fy = face(name)
         out.append(Shot(b, kb(name, (fx, fy, z), (fx, fy - 6, z * 1.05), b, t1, wash_k, adj, ang, extra, sk)))
     return out
@@ -923,13 +925,19 @@ def nearest_beat(t, tol=0.2):
 
 EIGHTHS = np.sort(np.concatenate([BEAT_T, (BEAT_T[:-1] + BEAT_T[1:]) / 2]))
 
+# The detected beats jitter by up to +-0.2 s in the montage; a constant-tempo grid fitted to the onsets
+# lands within a frame of 98% of the strong hits, so montage cuts snap to it instead.
+_G = _BEATS["grid_44_80"]
+MBEATS = np.arange(44.0 + ((_G["phase"] - 44.0) % _G["period"]), 80.0, _G["period"])
+MHALF = np.sort(np.concatenate([MBEATS, MBEATS[:-1] + _G["period"] / 2]))
+
 
 def snap_cuts(shots, end):
     """Snap cut points to the beat grid; fast cuts (< 0.45 s) use the half-beat grid. Order is kept."""
     orig = [sh.t0 for sh in shots]
     for i in range(1, len(shots)):
         gap = min(orig[i] - orig[i - 1], (orig[i + 1] if i + 1 < len(orig) else end) - orig[i])
-        grid, tol = (EIGHTHS, 0.12) if gap < 0.45 else (BEAT_T, 0.2)
+        grid, tol = (MHALF, 0.12) if gap < 0.45 else (MBEATS, 0.24)
         j = int(np.argmin(np.abs(grid - orig[i])))
         cand = float(grid[j]) if abs(grid[j] - orig[i]) <= tol else orig[i]
         if cand > shots[i - 1].t0 + 0.15:
@@ -940,9 +948,9 @@ def snap_cuts(shots, end):
 def lay_rapid(shots, t_from=76.6, t_to=78.8):
     """The quick-fire run: one card per half beat, back to back."""
     idx = [k for k, sh in enumerate(shots) if t_from <= sh.t0 <= t_to]
-    j = int(np.argmin(np.abs(EIGHTHS - shots[idx[0]].t0)))
+    j = int(np.argmin(np.abs(MHALF - shots[idx[0]].t0)))
     for n, k in enumerate(idx):
-        shots[k].t0 = float(EIGHTHS[j + n])
+        shots[k].t0 = float(MHALF[j + n])
     return shots
 
 
@@ -993,7 +1001,7 @@ def sketch_tinted(dst, name, fx, fy, dx, dy, scale, ang, color, opacity, reveal=
 # (asset, face x, face y as frame fraction, scale, angle from -> to, drift dx, dy, colour, start)
 OPEN_SKETCHES = [
     ("ysn3", 0.42, 0.45, 0.51, -6, -2, 60, -14, (0.84, 0.30, 0.78), 0.894),
-    ("Yoshino SSR4", 0.62, 0.40, 1.5, 5, 2, -70, 8, (0.95, 0.40, 0.66), 1.120),
+    ("tachie15", 0.60, 0.40, 2.2, 5, 2, -70, 8, (0.95, 0.40, 0.66), 1.120),
     ("tachie12", 0.42, 0.48, 2.4, -9, -5, 50, -24, (0.70, 0.42, 0.90), 1.347),
     ("tachie14", 0.58, 0.44, 2.3, 4, 1, -60, -10, (0.90, 0.34, 0.72), 1.603),
     ("ysn1", 0.45, 0.46, 0.55, -4, 0, 40, 10, (0.86, 0.38, 0.80), 1.858),
@@ -1088,7 +1096,7 @@ def seg_starring(t):
     return base
 
 
-QUICK = [("ysn2", 11.72, 12.05, 2.6), ("card21", 12.05, 12.38, 2.4), ("card16", 12.38, 12.7, 2.3), ("card2", 12.7, 13.0, 2.4)]
+QUICK = [("ysn2", 11.72, 12.05, 2.6), ("card27", 12.05, 12.38, 2.1), ("card28", 12.38, 12.7, 2.1), ("card29", 12.7, 13.0, 2.1)]
 
 
 def shrine(t, z0, z1, t0, t1):
@@ -1315,11 +1323,11 @@ def seg_waterfall(t):
     fr = screen(fr, np.roll(fl, shift, axis=1), 0.75)
     fr = to_white(fr, 1 - smooth(seg(t, 79.8, 80.2)))
     if t > 83.35:
-        x, y = face("ysn5")
+        x, y = face("tachie16")
         ur = smooth(seg(t, 83.35, 85.2))  # slow clockwise turn, drifting toward the bottom-right
-        cl = cover("ysn5", x + lerp(10, -30, ur), y + lerp(50, 20, ur), 2.4 * (1 + 0.05 * ur), lerp(-2.0, 6.0, ur))
-        cl = wash(cl, 0.5)
-        cl = to_white(cl, 0.25)
+        cl = cover("tachie16", x + lerp(10, -30, ur), y + lerp(40, 15, ur), 2.0 * (1 + 0.05 * ur), lerp(-2.0, 6.0, ur))
+        cl = wash(cl, 0.2)
+        cl = to_white(cl, 0.08)
         fr = mix(fr, cl, smooth(seg(t, 83.35, 84.0)))
     fr = to_white(fr, smooth(seg(t, 84.7, 85.15)))
     return fr
@@ -1471,8 +1479,8 @@ def grade(fr, g=1.0):
     """Soft, bright, pastel-pink look: diffusion, glow, lifted blacks, lower contrast and saturation."""
     if g <= 0:
         return fr
-    out = fr * 0.68 + blur(fr, 1.8) * 0.32
-    out = screen(out, blur(out, 16), 0.3)
+    out = fr * 0.76 + blur(fr, 1.8) * 0.24
+    out = screen(out, blur(out, 16), 0.24)
     lum = (out @ np.float32([0.3, 0.59, 0.11]))[..., None]
     out = lum + (out - lum) * 0.9
     out = 0.5 + (out - 0.5) * 1.06
@@ -1483,7 +1491,7 @@ def grade(fr, g=1.0):
 
 
 def grade_amount(t):
-    g = smooth(seg(t, 0.5, 1.0)) * (1 - smooth(seg(t, 113.15, 113.6)))
+    g = 0.85 * smooth(seg(t, 0.5, 1.0)) * (1 - smooth(seg(t, 113.15, 113.6)))
     if 44.6 < t < 47.6:  # the twilight shot keeps its depth
         g *= 1 - 0.5 * smooth(seg(t, 44.6, 44.9)) * (1 - smooth(seg(t, 47.3, 47.6)))
     if 99.3 < t < 100.75:
