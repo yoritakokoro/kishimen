@@ -3,3 +3,5 @@ __pycache__/
 out/sheet.png
 out/with_audio.mp4
 out/*_new.mp4
+out/patch_*.mp4
+out/spliced.mp4
