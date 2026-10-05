@@ -181,6 +181,8 @@ def prepare():
 
 CHECKER_ZOOM = 1.7  # the checker asset is shown enlarged
 CHECKER_SPEED = 40.0  # px/s
+CHECKER_DARK = np.float32([0.96, 0.70, 0.82])
+CHECKER_LIGHT = np.float32([1.0, 0.90, 0.94])
 
 
 @lru_cache(None)
@@ -188,8 +190,12 @@ def checker_tile():
     a = img("haikei")[..., :3].astype(np.float32) / 255.0
     h, w = a.shape[:2]
     big = cv2.resize(a, (int(w * CHECKER_ZOOM), int(h * CHECKER_ZOOM)), interpolation=cv2.INTER_CUBIC)
+    lum = big @ np.float32([0.3, 0.59, 0.11])
+    lo, hi = np.percentile(lum, 2), np.percentile(lum, 98)
+    k = np.clip((lum - lo) / max(hi - lo, 1e-3), 0, 1)[..., None]
+    big = CHECKER_DARK * (1 - k) + CHECKER_LIGHT * k  # deepen the very pale asset into clear pink squares
     reps = int(math.ceil(W / big.shape[1])) + 1
-    return np.ascontiguousarray(np.concatenate([big] * reps, axis=1)[:, :W])
+    return np.ascontiguousarray(np.concatenate([big] * reps, axis=1)[:, :W]).astype(np.float32)
 
 
 def checker_at(t, boost=1.0, direction=-1):
@@ -864,11 +870,11 @@ MONTAGE = [
     Shot(65.25, kb("card10", (690, 280, 1.5), (690, 545, 1.5), 65.25, 67.2,  # top-to-bottom reveal, feathers rising
                    wash_k=lambda u: 0.8 * (1 - smooth(clamp01(u * 2.5))), extra=_feathers), "white", 0.5, no_punch=True),
     Shot(67.2, kb("card10", fz("card10", 2.2), fzo("card10", 2.3, 0, -5), 67.2, 68.0)),
-    Shot(67.95, kb("card5", fzo("card5", 1.3, 0, -20), fzo("card5", 1.3, 0, -20), 67.95, 68.25), "fade", 0.3),
-    Shot(68.2, kb("card5", fz("card5", 2.2), fz("card5", 2.3), 68.2, 68.75), "fade", 0.3),
-    Shot(68.7, kb("card5", fzo("card5", 1.5, 0, -20), fzo("card5", 1.55, 0, -20), 68.7, 69.25), "fade", 0.2),
-    Shot(69.2, kb("card13", fz("card13", 1.7), fz("card13", 1.75), 69.2, 69.75), "fade", 0.15),
-    Shot(69.7, kb("card13", fzo("card13", 1.45, 0, 30), fz("card13", 1.6), 69.7, 71.1), "fade", 0.2),
+    Shot(67.95, kb("card13", fz("card13", 1.7), fz("card13", 1.75), 67.95, 68.45), "fade", 0.3),
+    Shot(68.45, kb("card13", fzo("card13", 1.45, 0, 30), fz("card13", 1.6), 68.45, 69.85), "fade", 0.2),
+    Shot(69.85, kb("card5", fzo("card5", 1.3, 0, -20), fzo("card5", 1.3, 0, -20), 69.85, 70.1), "fade", 0.3),
+    Shot(70.1, kb("card5", fz("card5", 2.2), fz("card5", 2.3), 70.1, 70.6), "fade", 0.3),
+    Shot(70.6, kb("card5", fzo("card5", 1.5, 0, -20), fzo("card5", 1.55, 0, -20), 70.6, 71.15), "fade", 0.2),
     Shot(71.1, kb("card12", fzo("card12", 1.5, 40, -40), fzo("card12", 1.6, 30, -40), 71.1, 72.85, extra=_notes12),
          "blur", 0.35),
     Shot(72.85, kb("card16", fzo("card16", 1.6, 0, 20), fzo("card16", 1.72, -10, 10), 72.85, 74.6), "blur", 0.35),
@@ -995,7 +1001,7 @@ def seg_opening(t):
         return full(0.0)
     if t < 0.9:
         return full(smooth(seg(t, 0.35, 0.9)) ** 1.4)
-    fr = to_white(checker_at(t, 1.8), 0.2)
+    fr = to_white(checker_at(t), 0.12)
     starts = [o[-1] for o in OPEN_SKETCHES] + [OPEN_END]
     for i, (name, x, y, sc, a0, a1, ddx, ddy, col, tb) in enumerate(OPEN_SKETCHES):
         te = starts[i + 1]
@@ -1033,10 +1039,10 @@ def seg_brand(t):
     if t < 2.6:
         fr = seg_opening(t)
         fr = to_white(fr, seg(t, 2.3, 2.6) * 0.5)
-        base = to_white(checker_at(t, 1.8), 0.12)
+        base = checker_at(t)
         fr = mix(fr, base, smooth(seg(t, 2.3, 2.6)))
     else:
-        fr = to_white(checker_at(t, 1.8), 0.12)
+        fr = checker_at(t)
     # white then soft squares (3.15-4.0)
     fr = to_white(fr, smooth(seg(t, 3.1, 3.3)))
     if t > 3.3:
@@ -1069,9 +1075,9 @@ def seg_starring(t):
     base = full(0, (0.99, 0.80, 0.88))
     squares(base, t, SQ_VIVID, grow=1.1)
     squares(base, t * 0.7, SQ_SOFT, grow=1.3, opacity=0.7)
-    for name, x, y, sc, t0 in (("tachie4", 240, 250, 1.7, 6.85), ("ysn5", 585, 395, 0.32, 7.6),
-                               ("tachie3", 830, 560, 1.4, 7.26)):
-        put(base, name, x, y, scale=sc, opacity=smooth(seg(t, t0, t0 + 0.45)))
+    for name, x, y, sc, t0 in (("tachie4", 240, 250, 1.7, 6.85), ("ysn5", 600, 360, 0.42, 7.6),
+                               ("tachie3", 845, 520, 1.85, 7.26)):
+        put(base, name, x, y, scale=sc, opacity=smooth(seg(t, t0, t0 + 0.9)))
     starring_text(base, t)
     base = to_white(base, smooth(seg(t, 10.0, 10.45)))
     return base
@@ -1155,7 +1161,7 @@ def seg_group(t):
 
 
 def seg_title(t):
-    fr = checker_at(t, 2.4, direction=1)
+    fr = checker_at(t, direction=1)
     sq = smooth(seg(t, 22.8, 24.0))
     if sq > 0:
         squares(fr, t, SQ_SOFT, grow=lerp(0.5, 1.25, seg(t, 22.8, 26.0)), opacity=sq)
@@ -1370,7 +1376,7 @@ def seg_finale(t):
                    bright=0.2 * (1 - seg(t, 100.5, 101.0)), glow=1.2 - 0.8 * seg(t, 100.5, 101.0))
         fr = zoom_blur(fr, 0.4 * hit)
         return fr
-    fr = checker_at(t, 2.4, direction=1)
+    fr = checker_at(t, direction=1)
     if t < 101.62:
         title_logo(fr, st=0.84, glow=0.25)
     elif t < 102.22:
