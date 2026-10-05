@@ -1078,7 +1078,7 @@ def seg_starring(t):
     base = full(0, (0.99, 0.80, 0.88))
     squares(base, t, SQ_VIVID, grow=1.1)
     squares(base, t * 0.7, SQ_SOFT, grow=1.3, opacity=0.7)
-    for name, x, y, sc, t0 in (("tachie4", 240, 250, 1.7, 6.85), ("ysn5", 600, 360, 0.42, 7.6),
+    for name, x, y, sc, t0 in (("tachie4", 240, 250, 1.7, 6.85), ("ysn5", 600, 360, 0.42, 7.9),
                                ("tachie3", 845, 520, 1.85, 7.26)):
         put(base, name, x, y, scale=sc, opacity=smooth(seg(t, t0, t0 + 0.9)))
     starring_text(base, t)
