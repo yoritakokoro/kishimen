@@ -43,12 +43,15 @@ def _still(t):
     return (scenes.render(t) * 255 + 0.5).astype(np.uint8)
 
 
-def render_movie(path, t0, t1, crf=17):
+def render_movie(path, t0, t1, crf=17, lossless=False):
     OUT.mkdir(exist_ok=True)
     n0, n1 = int(round(t0 * FPS)), int(round(t1 * FPS))
+    if lossless:  # RGB lossless master, for encoding high-quality copies without re-rendering
+        enc = ["-c:v", "libx264rgb", "-preset", "ultrafast", "-qp", "0", "-pix_fmt", "rgb24"]
+    else:
+        enc = ["-c:v", "libx264", "-preset", "slow", "-crf", str(crf), "-pix_fmt", "yuv420p", "-movflags", "+faststart"]
     cmd = ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}",
-           "-r", str(FPS), "-i", "-", "-c:v", "libx264", "-preset", "slow", "-crf", str(crf),
-           "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(path)]
+           "-r", str(FPS), "-i", "-"] + enc + [str(path)]
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
     with Pool(4) as pool:
         for k, b in enumerate(pool.imap(frame_bytes, range(n0, n1), chunksize=4)):
@@ -67,13 +70,15 @@ def main():
     ap.add_argument("--from", dest="t0", type=float, default=0.0)
     ap.add_argument("--to", dest="t1", type=float, default=scenes.DURATION)
     ap.add_argument("--out", default=str(OUT / "yoshinon_rhyme_pv.mp4"))
+    ap.add_argument("--crf", type=int, default=17, help="x264 quality (lower = better, larger)")
+    ap.add_argument("--lossless", action="store_true", help="write a lossless RGB master (.mkv)")
     a = ap.parse_args()
     scenes.prepare()
     OUT.mkdir(exist_ok=True)
     if a.sheet:
         sheet(a.sheet, a.sheet_out)
         return
-    render_movie(a.out, a.t0, a.t1)
+    render_movie(a.out, a.t0, a.t1, crf=a.crf, lossless=a.lossless)
 
 
 if __name__ == "__main__":
