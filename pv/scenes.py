@@ -181,13 +181,25 @@ def prepare():
 
 CHECKER_ZOOM = 1.7  # the checker asset is shown enlarged
 CHECKER_SPEED = 40.0  # px/s
-CHECKER_DARK = np.float32([0.96, 0.70, 0.82])
-CHECKER_LIGHT = np.float32([1.0, 0.90, 0.94])
+# square boundaries measured in haikei.png (first pixel of each square); 8 squares each way
+CHECKER_XS = (21, 68, 115, 164, 208, 257, 305, 352, 400)
+CHECKER_YS = (28, 74, 120, 168, 219, 264, 310, 356, 412)
+CHECKER_CELL = 48
+CHECKER_DARK = np.float32([0.985, 0.835, 0.905])
+CHECKER_LIGHT = np.float32([1.0, 0.955, 0.975])
 
 
 @lru_cache(None)
 def checker_tile():
-    a = img("haikei")[..., :3].astype(np.float32) / 255.0
+    src = img("haikei")[..., :3].astype(np.float32) / 255.0
+    # Rebuild the tile from 8 x 8 whole squares of the asset, each resampled to the same size, so the squares are
+    # regular and the tile repeats seamlessly (the asset's own squares vary from 44 to 56 px and its edges cut squares).
+    c = CHECKER_CELL
+    rows = []
+    for y0, y1 in zip(CHECKER_YS[:-1], CHECKER_YS[1:]):
+        rows.append(np.concatenate([cv2.resize(src[y0:y1, x0:x1], (c, c), interpolation=cv2.INTER_AREA)
+                                    for x0, x1 in zip(CHECKER_XS[:-1], CHECKER_XS[1:])], axis=1))
+    a = np.concatenate(rows, axis=0)
     h, w = a.shape[:2]
     big = cv2.resize(a, (int(w * CHECKER_ZOOM), int(h * CHECKER_ZOOM)), interpolation=cv2.INTER_CUBIC)
     lum = big @ np.float32([0.3, 0.59, 0.11])
