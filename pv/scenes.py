@@ -179,33 +179,19 @@ def prepare():
 # --------------------------------------------------------------------------- building blocks
 
 
-CHECKER_ZOOM = 1.7  # the checker asset is shown enlarged
 CHECKER_SPEED = 40.0  # px/s
-# square boundaries measured in haikei.png (first pixel of each square); 8 squares each way
-CHECKER_XS = (21, 68, 115, 164, 208, 257, 305, 352, 400)
-CHECKER_YS = (28, 74, 120, 168, 219, 264, 310, 356, 412)
-CHECKER_CELL = 48
-CHECKER_DARK = np.float32([0.985, 0.835, 0.905])
-CHECKER_LIGHT = np.float32([1.0, 0.955, 0.975])
+CHECKER_SRC_CELL = 161  # square size in checker.jpg
+CHECKER_COLS, CHECKER_ROWS = 8, 16  # even counts, so tiling keeps the colours alternating
+CHECKER_SQUARE = 82  # square size on screen
 
 
 @lru_cache(None)
 def checker_tile():
-    src = img("haikei")[..., :3].astype(np.float32) / 255.0
-    # Rebuild the tile from 8 x 8 whole squares of the asset, each resampled to the same size, so the squares are
-    # regular and the tile repeats seamlessly (the asset's own squares vary from 44 to 56 px and its edges cut squares).
-    c = CHECKER_CELL
-    rows = []
-    for y0, y1 in zip(CHECKER_YS[:-1], CHECKER_YS[1:]):
-        rows.append(np.concatenate([cv2.resize(src[y0:y1, x0:x1], (c, c), interpolation=cv2.INTER_AREA)
-                                    for x0, x1 in zip(CHECKER_XS[:-1], CHECKER_XS[1:])], axis=1))
-    a = np.concatenate(rows, axis=0)
-    h, w = a.shape[:2]
-    big = cv2.resize(a, (int(w * CHECKER_ZOOM), int(h * CHECKER_ZOOM)), interpolation=cv2.INTER_CUBIC)
-    lum = big @ np.float32([0.3, 0.59, 0.11])
-    lo, hi = np.percentile(lum, 2), np.percentile(lum, 98)
-    k = np.clip((lum - lo) / max(hi - lo, 1e-3), 0, 1)[..., None]
-    big = CHECKER_DARK * (1 - k) + CHECKER_LIGHT * k  # deepen the very pale asset into clear pink squares
+    src = img("checker")[..., :3].astype(np.float32) / 255.0
+    c = CHECKER_SRC_CELL
+    a = src[:CHECKER_ROWS * c, :CHECKER_COLS * c]
+    s = CHECKER_SQUARE / c
+    big = cv2.resize(a, (round(a.shape[1] * s), round(a.shape[0] * s)), interpolation=cv2.INTER_AREA)
     reps = int(math.ceil(W / big.shape[1])) + 1
     return np.ascontiguousarray(np.concatenate([big] * reps, axis=1)[:, :W]).astype(np.float32)
 
@@ -661,6 +647,11 @@ def _diag(ang):
     return (c - c.min()) / (c.max() - c.min())
 
 
+def wipe_mask(u, ang):
+    """Where slash_wipe shows B (0..1)."""
+    return np.clip((lerp(-0.12, 1.12, smooth(u)) - _diag(ang)) / 0.015, 0, 1)
+
+
 def slash_wipe(A, B, u, ang=-62, sk=None):
     c = _diag(ang)
     p = lerp(-0.12, 1.12, smooth(u))
@@ -1013,7 +1004,7 @@ def seg_opening(t):
         return full(0.0)
     if t < 0.9:
         return full(smooth(seg(t, 0.35, 0.9)) ** 1.4)
-    fr = to_white(checker_at(t), 0.12)
+    fr = checker_at(t)
     starts = [o[-1] for o in OPEN_SKETCHES] + [OPEN_END]
     for i, (name, x, y, sc, a0, a1, ddx, ddy, col, tb) in enumerate(OPEN_SKETCHES):
         te = starts[i + 1]
@@ -1225,9 +1216,10 @@ def bg_drift_y(k, tau):
     return H * 0.40 - lerp(dy0, dy1, u) * 1.2 * s
 
 
-def intro_frame(k, t):
+def intro_frame(k, t, with_mask=False):
     start, name, z, pan, tachie, side = INTROS[k]
     tau = t - start
+    mask = np.zeros((H, W), np.float32)
     nm, cx, cy, zz = closeup_view(k, tau)
     fr = cover(nm, cx, cy, zz)
     if zz > 2.5:  # strong upscale (SSR5: she is small in the card) -> light unsharp mask
@@ -1249,12 +1241,14 @@ def intro_frame(k, t):
         w, h = size_of(tachie)
         fx = face(tachie)[0] if tachie in CUT_FACE else 0.45 * w
         drop = bg_drift_y(k, tau) - bg_drift_y(k, entry)  # drift down with the background
-        place(fr, tachie, fx, 0, tx, 6 + drop, 0.98, 0, tu)
+        lay = warp_layer(tachie, fx, 0, tx, 6 + drop, 0.98)
+        over(fr, lay, tu)
+        mask = to_f(lay)[..., 3] * tu
     petal_shower(fr, tau, n=24, seed=100 + k)  # each new CG brings a fall of petals
     name_plate(fr, tau - entry - 0.15, "r" if side == "l" else "l")
     if k == 0:
         fr = to_white(fr, 1 - smooth(seg(t, 26.5, 27.05)))
-    return fr
+    return (fr, mask) if with_mask else fr
 
 
 def seg_intros(t):
@@ -1262,24 +1256,30 @@ def seg_intros(t):
     for i, it in enumerate(INTROS):
         if t >= it[0]:
             k = i
-    fr = intro_frame(k, t)
+    fr, m = intro_frame(k, t, with_mask=True)
     if k > 0 and t < INTROS[k][0] + 0.38:
-        prev = intro_frame(k - 1, t)
+        prev, mp = intro_frame(k - 1, t, with_mask=True)
         nm, cx, cy, zz = closeup_view(k, t - INTROS[k][0])
         w, h = size_of(nm)
         s = max(W / w, H / h) * zz
         sk = sketch_layer(nm, cx, cy, W / 2, H / 2, s)
-        fr = slash_wipe(prev, fr, seg(t, INTROS[k][0], INTROS[k][0] + 0.38), ang=-62 if k % 2 else 242, sk=sk)
+        u, ang = seg(t, INTROS[k][0], INTROS[k][0] + 0.38), (-62 if k % 2 else 242)
+        fr = slash_wipe(prev, fr, u, ang=ang, sk=sk)
+        mB = wipe_mask(u, ang)
+        m = mp * (1 - mB) + m * mB
+    GRADE_PROTECT[0] = m
     return fr
 
 
 def seg_montage(t):
     if t < INTRO_END + 0.38:
-        prev = intro_frame(4, t)
+        prev, mp = intro_frame(4, t, with_mask=True)
         cur = MONTAGE[0].render(t)
         sk = sketch_layer("card9", face("card9")[0] + 60, face("card9")[1] + 20, W / 2, H / 2,
                           max(W / 1280, H / 824) * 1.25)
-        return slash_wipe(prev, cur, seg(t, INTRO_END, INTRO_END + 0.38), ang=-62, sk=sk)
+        u = seg(t, INTRO_END, INTRO_END + 0.38)
+        GRADE_PROTECT[0] = mp * (1 - wipe_mask(u, -62))
+        return slash_wipe(prev, cur, u, ang=-62, sk=sk)
     fr = run_shots(MONTAGE, t)
     # white flashes between beats
     fr = to_white(fr, pulse(t, 54.3, 54.5, 54.68) * 0.8)
@@ -1460,6 +1460,10 @@ def shot_correct(fr, t):
     return fr
 
 
+GRADE_PROTECT = [None]  # mask set by a segment to soften the grade under it (per render call)
+TACHIE_GRADE_CUT = 0.7
+
+
 def grade(fr, g=1.0):
     """Soft, bright, pastel-pink look: diffusion, glow, lifted blacks, lower contrast and saturation."""
     if g <= 0:
@@ -1495,5 +1499,11 @@ def render(t):
         fr = fn(t)
     fr = catchcopy(fr, t)
     fr = shot_correct(np.clip(fr, 0, 1), t)
-    fr = grade(fr, grade_amount(t))
+    g = grade_amount(t)
+    protect, GRADE_PROTECT[0] = GRADE_PROTECT[0], None
+    if protect is None or g <= 0:
+        fr = grade(fr, g)
+    else:  # standing art keeps only 30% of the soft-focus look
+        k = (g * (1 - TACHIE_GRADE_CUT * protect))[..., None]
+        fr = fr + (grade(fr, 1.0) - fr) * k
     return np.clip(fr, 0, 1)
