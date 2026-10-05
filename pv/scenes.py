@@ -347,7 +347,7 @@ def name_plate(dst, tau, side):
 
 CREDITS = [
     ("l", [("出演", "依田芳乃"), ("CV", "高田憂希")]),
-    ("r", [("企画", "こころ"), ("イラスト素材", "バンダイナムコ")]),
+    ("r", [("企画", "藤原　肇"), ("イラスト素材", "バンダイナムコ")]),
     ("l", [("Theme song", "『true my heart』"), ("歌", "ave;new feat.佐倉紗織"),
            ("作詞", "a.k.a.dRESS & 佐倉紗織"), ("作曲・編曲", "a.k.a.dRESS (ave;new)")]),
     ("r", [("映像・エフェクト", "Claude"), ("プログラム", "Python"), ("スペシャルサンクス", "すべてのプロデューサーさん")]),
@@ -730,9 +730,6 @@ def seg_starring(t):
     put(base, "ysn5", 585, lerp(420, 395, u3), scale=0.32, opacity=u3)
     u2 = ease_out(seg(t, 7.75, 8.2))
     put(base, "tachie3", lerp(1020, 830, u2), 560, scale=1.4, opacity=u2)
-    seal_u = ease_out(seg(t, 7.4, 7.8))
-    if seal_u > 0:
-        place(base, "seal", 60, 60, W - 78, 70, 0.9 + 0.1 * seal_u, (1 - seal_u) * 30, seal_u)
     starring_text(base, t)
     base = to_white(base, 1 - smooth(seg(t, 6.9, 7.1)), (0.99, 0.84, 0.91))
     base = to_white(base, smooth(seg(t, 10.0, 10.45)))

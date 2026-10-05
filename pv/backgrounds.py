@@ -7,7 +7,7 @@ import math
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 
-from common import BUILD, H, W, img, pil_to_layer, register, size_of, font, FONT_SERIF
+from common import BUILD, H, W
 
 SS = 2  # supersampling factor
 
@@ -99,24 +99,10 @@ def draw_flare(size=(W, H)):
     return out.astype(np.float32)
 
 
-def draw_seal(size=120):
-    """Small vermilion seal emblem with 芳 (replaces the original's music-label mark)."""
-    S = size * 4
-    im = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-    d = ImageDraw.Draw(im)
-    d.ellipse([8, 8, S - 8, S - 8], outline=(214, 64, 70, 255), width=int(S * 0.06))
-    d.ellipse([S * 0.14, S * 0.14, S * 0.86, S * 0.86], outline=(214, 64, 70, 200), width=int(S * 0.015))
-    f = font(FONT_SERIF, int(S * 0.5))
-    d.text((S / 2, S / 2 + S * 0.02), "芳", font=f, fill=(214, 64, 70, 255), anchor="mm")
-    return im.resize((size, size), Image.LANCZOS)
-
-
 def build_all():
     BUILD.mkdir(exist_ok=True)
     if not (BUILD / "flare.npy").exists():
         np.save(BUILD / "flare.npy", draw_flare())
-    if not (BUILD / "seal.npy").exists():
-        register("seal", pil_to_layer(draw_seal()))
 
 
 if __name__ == "__main__":

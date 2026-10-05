@@ -7,11 +7,11 @@ reference opening movie, with every character shot replaced by Yoshino artwork f
 - Logos and ribbon: `logo1.jpg` (brand), `logo2.jpg` (title, background removed in code), `heart1-3.png`
 - Backgrounds: `haikei.png`, `bg_sakura_night.jpg`, `bg_waterfall.jpg`
 - Drawn in code: halftone screens, rotating squares, sakura petals, line-art (sketch) filter, zoom blur,
-  lens glare, emotes (♪, !, sweat drop), the 芳 seal, the group/action collage backdrops and all text
+  lens glare, emotes (♪, !, sweat drop), the group/action collage backdrops and all text
 
 Catch copy: 神さびて　愛らしく――それはひとりの偶像（神様）の物語。
 
-Credits: 企画 こころ / イラスト素材 バンダイナムコ / 映像・エフェクト Claude / プログラム Python /
+Credits: 企画 藤原　肇 / イラスト素材 バンダイナムコ / 映像・エフェクト Claude / プログラム Python /
 Theme song 『true my heart』 ave;new feat.佐倉紗織 (作詞 a.k.a.dRESS & 佐倉紗織, 作曲・編曲 a.k.a.dRESS).
 
 ## Render
