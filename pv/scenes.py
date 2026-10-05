@@ -188,7 +188,7 @@ def _place_canvas(name, x, y, s, GW, GH, ang=0.0):
 def prepare():
     backgrounds.build_all()
     from common import BUILD
-    for key, fn in (("logo_title", lambda: extract_on_white("logo2", enclosed=True, protect=[(480, 140, 740, 520)])),
+    for key, fn in (("logo_title", lambda: img("logo_yoshinon")),  # user-supplied cut-out title logo
                     ("logo_brand", lambda: extract_on_white("logo1")),
                     ("group", compose_group),
                     ("action", compose_action)):
@@ -319,11 +319,16 @@ def tagline_layer(y=H * 0.605):
                       stroke=2, stroke_fill=(255, 255, 255))
 
 
+CATCH_IN = (12.72, 13.4)
+CATCH_OUT = 16.75  # sparkle-out starts here, sweeping left to right
+CATCH_SWEEP = 0.4
+CATCH_SIZE = 34
+
+
 @lru_cache(None)
 def catch_layer():
-    """Catch copy with ruby 神様 over 偶像, as a full-frame layer plus glyph positions."""
-    size = 34
-    im, pad, xs, widths = text_image(CATCH_MAIN, FONT_SERIF, size, fill=(255, 255, 255), stroke=4,
+    """Catch copy with ruby 神様 over 偶像, centred in the frame, plus per-glyph screen boxes."""
+    im, pad, xs, widths = text_image(CATCH_MAIN, FONT_SERIF, CATCH_SIZE, fill=(255, 255, 255), stroke=4,
                                      stroke_fill=(220, 80, 140), glow=8, glow_col=(255, 130, 186), glow_k=1.0)
     i = CATCH_MAIN.index("偶像")
     gx = xs[i]
@@ -332,25 +337,98 @@ def catch_layer():
                                     stroke_fill=(234, 108, 160), glow=4, glow_col=(255, 150, 196), spacing=3)
     tw = im.size[0] - 2 * pad
     x0 = W / 2 - tw / 2
-    y0 = H * 0.855  # bottom of frame, below the faces
+    y0 = H / 2 - CATCH_SIZE * 0.7
+    ox = int(x0 - pad)
     canvas = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    canvas.alpha_composite(im, (int(x0 - pad), int(y0 - pad)))
+    canvas.alpha_composite(im, (ox, int(y0 - pad)))
     rw = sum(rwid)
     rx = x0 + (gx - pad) + gw / 2 - rw / 2 + 1
     canvas.alpha_composite(rim, (int(rx - rpad), int(y0 - pad - 8)))
     lay = pil_to_layer(canvas)
-    return lay, x0, x0 + tw
+    glyph_x = [ox + x for x in xs]
+    # column -> glyph index, so every column (glyph, stroke, glow, ruby) leaves with its glyph
+    col = np.zeros(W, np.int32)
+    for k, gx_k in enumerate(glyph_x):
+        col[int(max(0, gx_k - 6)):] = k
+    return lay, x0, x0 + tw, tuple(glyph_x), tuple(widths), (y0 - 14, y0 + CATCH_SIZE * 1.35), col
+
+
+def _glyph_start(k, n):
+    return CATCH_OUT + CATCH_SWEEP * k / max(1, n - 1)
+
+
+@lru_cache(None)
+def catch_stars():
+    _, _, _, gx, gw, (ya, yb), _ = catch_layer()
+    rng = np.random.default_rng(17)
+    stars = []
+    for k, (x, w) in enumerate(zip(gx, gw)):
+        if CATCH_MAIN[k] in "　―":
+            continue
+        for j in range(3 if j_is_big(k) else 2):
+            stars.append((_glyph_start(k, len(gx)) + rng.uniform(0.0, 0.1), x + rng.uniform(0.15, 0.85) * w,
+                          rng.uniform(ya + 6, yb - 6), rng.uniform(11, 22), rng.uniform(0, 0.8),
+                          rng.uniform(-40, -14), rng.uniform(-10, 10)))
+    return stars
+
+
+def j_is_big(k):
+    return k % 2 == 0
+
+
+def star_poly(x, y, r, ang, thin=0.16):
+    pts = []
+    for k in range(8):
+        th = ang + k * math.pi / 4
+        rr = r if k % 2 == 0 else r * thin
+        pts.append((x + math.cos(th) * rr, y + math.sin(th) * rr))
+    return pts
+
+
+def catch_sparkles(dst, t):
+    """Four-point stars that flash up as each glyph vanishes, then drift up and fade."""
+    polys, dots = [], []
+    life = 0.34
+    for t0, x, y, r, ang, vy, vx in catch_stars():
+        u = (t - t0) / life
+        if u <= 0 or u >= 1:
+            continue
+        k = math.sin(math.pi * u) ** 1.5
+        px, py = x + vx * u, y + vy * u
+        polys.append(star_poly(px, py, r * (0.3 + 0.9 * k), ang + u * 1.6))
+        dots.append((px, py, 3.5 * k))
+    if not polys:
+        return dst
+    m = poly_mask(polys)
+    for px, py, rad in dots:
+        cv2.circle(m, (int(px * 16), int(py * 16)), max(1, int(rad * 16)), 255, -1, cv2.LINE_AA, 4)
+    glow = cv2.GaussianBlur(m, (0, 0), 7).astype(np.float32) / 255.0
+    dst[:] = screen(dst, np.clip(glow * 2.2, 0, 1)[..., None] * np.float32([1.0, 0.62, 0.84]), 0.9)
+    fill_mask(dst, m, (1.0, 0.98, 0.92), 1.0)
+    return dst
 
 
 def catchcopy(dst, t):
-    if t < 12.72 or t > 17.35:
+    if t < CATCH_IN[0] or t > CATCH_OUT + CATCH_SWEEP + 0.5:
         return dst
-    lay, x0, x1 = catch_layer()
-    rev = lerp(x0 - 20, x1 + 60, smooth(seg(t, 12.72, 13.4)))
-    op = 1 - smooth(seg(t, 17.0, 17.35))
+    lay, x0, x1, gx, gw, _, col = catch_layer()
+    lf = to_f(lay)
     xn = np.arange(W, dtype=np.float32)
-    m = np.clip((rev - xn) / 50.0, 0, 1)[None, :, None]
-    return over(dst, to_f(lay) * m, op)
+    rev = lerp(x0 - 20, x1 + 60, smooth(seg(t, *CATCH_IN)))
+    m = np.clip((rev - xn) / 50.0, 0, 1)
+    if t >= CATCH_OUT:
+        n = len(gx)
+        starts = np.array([_glyph_start(k, n) for k in range(n)], np.float32)[col]
+        v = np.clip((t - starts) / 0.16, 0, 1)
+        flash = np.sin(np.pi * np.clip(v / 0.5, 0, 1)) * (v < 0.5)
+        fade = np.clip((v - 0.35) / 0.65, 0, 1)
+        m = m * (1 - fade * fade * (3 - 2 * fade))
+        a = lf[..., 3:4]
+        lf = np.concatenate([np.minimum(lf[..., :3] + a * flash[None, :, None] * 0.6, a), a], -1)
+    over(dst, lf * m[None, :, None], 1.0)
+    if t >= CATCH_OUT:
+        catch_sparkles(dst, t)
+    return dst
 
 
 def name_plate(dst, tau, side):

@@ -4,7 +4,7 @@ A 1:54 fan-made opening movie starring 依田芳乃. It follows the cut structur
 reference opening movie, with every character shot replaced by Yoshino artwork from this repository.
 
 - Character art: `card*.png`, `Yoshino SSR*.png`, `tachie*.png`, `ysn*.png`
-- Logos and ribbon: `logo1.jpg` (brand), `logo2.jpg` (title, background removed in code), `heart1-3.png`
+- Logos and ribbon: `logo1.jpg` (brand), `logo_yoshinon.png` (title, pre-cut), `heart1-3.png`
 - Backgrounds: `haikei.png`, `bg_sakura_night.jpg`, `bg_waterfall.jpg`
 - Drawn in code: halftone screens, rotating squares, sakura petals, line-art (sketch) filter, zoom blur,
   lens glare, emotes (♪, !, sweat drop), the group/action collage backdrops and all text
