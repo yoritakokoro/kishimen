@@ -1176,7 +1176,7 @@ INTROS = [  # start, closeup source, closeup zoom, pan (dx0, dy0, dx1, dy1), tac
     (30.2, "Yoshino SSR2", 2.25, (40, 20, -20, -10), "Yoshino SSR2 tachie", "r"),
     (33.7, "Yoshino SSR3", 2.4, (-20, 40, 20, 0), "Yoshino SSR3 tachie", "l"),
     (37.2, "Yoshino SSR4", 1.55, (40, 30, -30, -10), "Yoshino SSR4 tachie", "r"),
-    (40.7, "Yoshino SSR5", 2.9, (-5, 5, 50, 45), "Yoshino SSR5 tachie", "l"),
+    (40.7, "Yoshino SSR5", 2.9, (-5, 45, 50, 5), "Yoshino SSR5 tachie", "l"),
 ]
 INTRO_END = 44.6
 INTRO_LEN = [INTROS[i + 1][0] - INTROS[i][0] for i in range(4)] + [INTRO_END - INTROS[4][0]]
@@ -1202,6 +1202,15 @@ def closeup_view(k, tau):
     return name, cx, cy, zz
 
 
+def bg_drift_y(k, tau):
+    """Screen y of the close-up's face point (pan and slow zoom only, no punch-in)."""
+    start, name, z, (dx0, dy0, dx1, dy1), _, _ = INTROS[k]
+    u = clamp01(tau / (INTRO_LEN[k] + 0.4))
+    w, h = size_of(name)
+    s = max(W / w, H / h) * z * (1 + 0.15 * u)
+    return H * 0.40 - lerp(dy0, dy1, u) * 1.2 * s
+
+
 def intro_frame(k, t):
     start, name, z, pan, tachie, side = INTROS[k]
     tau = t - start
@@ -1220,15 +1229,13 @@ def intro_frame(k, t):
         halftone(fr, field, (1.0, 1.0, 1.0), 0.55, cell=22)
         halftone(fr, np.clip((yn - 0.72) / 0.28, 0, 1) * ht, (0.98, 0.62, 0.78), 0.5, cell=16, ang=30, square=False)
     entry = nearest_beat(start + 1.45, 0.25) - start
-    tu = ease_out(clamp01((tau - entry) / 0.45))
+    tu = smooth(clamp01((tau - entry) / 0.15))  # quick fade-in
     if tu > 0:
         tx = W * 0.20 if side == "l" else W * 0.80
-        off = (1 - tu) * (-160 if side == "l" else 160)
         w, h = size_of(tachie)
         fx = face(tachie)[0] if tachie in CUT_FACE else 0.45 * w
-        place(fr, tachie, fx, 0, tx + off, 6, 0.98, 0, tu)
-        if tu < 1:
-            place(fr, tachie, fx, 0, tx + off * 2.2, 6, 0.98, 0, (1 - tu) * 0.35)
+        drop = bg_drift_y(k, tau) - bg_drift_y(k, entry)  # drift down with the background
+        place(fr, tachie, fx, 0, tx, 6 + drop, 0.98, 0, tu)
     petal_shower(fr, tau, n=24, seed=100 + k)  # each new CG brings a fall of petals
     name_plate(fr, tau - entry - 0.15, "r" if side == "l" else "l")
     if k == 0:
