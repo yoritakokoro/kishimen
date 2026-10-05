@@ -134,7 +134,7 @@ def extract_on_white(name, thresh=46.0, enclosed=False, protect=()):
 
 GROUP_W, GROUP_H = 1180, 885
 GROUP_LAYOUT = [  # name, face x, face y (canvas px), scale, rise speed (canvas px/s)
-    ("tachie9", 250, 215, 1.55, 9), ("tachie5", 950, 200, 1.6, 11), ("tachie3", 610, 235, 1.45, 10),
+    ("tachie9", 250, 215, 1.55, 9), ("tachie3", 610, 235, 1.45, 10), ("tachie5", 950, 200, 1.6, 11),
     ("tachie2", 280, 520, 1.65, 13), ("tachie8", 905, 545, 1.6, 12), ("tachie4", 585, 600, 1.62, 14),
 ]
 
