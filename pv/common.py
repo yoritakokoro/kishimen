@@ -252,8 +252,8 @@ def zoom_blur(rgb, amount, cx=W / 2, cy=H / 2, n=10):
     return acc / n
 
 
-PINK_DARK = np.float32([0.60, 0.50, 0.50])  # Yoshino duotone: dusty rose-taupe
-PINK_LIGHT = np.float32([0.985, 0.965, 0.955])  # ivory
+PINK_DARK = np.float32([0.86, 0.36, 0.58])
+PINK_LIGHT = np.float32([1.0, 0.95, 0.97])
 
 
 def wash(rgb, k, dark=PINK_DARK, light=PINK_LIGHT, keep=0.25):

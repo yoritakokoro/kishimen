@@ -48,13 +48,13 @@ def draw_group_backdrop(size):
     """Soft white-pink backdrop with bokeh circles for the all-Yoshino group shot."""
     BW, BH = size[0] * SS, size[1] * SS
     rng = np.random.default_rng(3)
-    base = _grad((BW, BH), [(0, (250, 246, 242)), (0.6, (236, 228, 222)), (1, (222, 212, 206))]).convert("RGBA")
+    base = _grad((BW, BH), [(0, (255, 246, 250)), (0.6, (252, 222, 234)), (1, (248, 200, 220))]).convert("RGBA")
     lay = _layer(base.size)
     d = ImageDraw.Draw(lay)
     for _ in range(60):
         x, y = rng.uniform(0, BW), rng.uniform(0, BH)
         r = rng.uniform(20, 90) * SS
-        col = [(255, 255, 255), (240, 214, 220), (232, 224, 218)][rng.integers(0, 3)]
+        col = [(255, 255, 255), (255, 200, 222), (255, 226, 236)][rng.integers(0, 3)]
         d.ellipse([x - r, y - r, x + r, y + r], fill=col + (int(rng.uniform(60, 150)),))
     base.alpha_composite(lay.filter(ImageFilter.GaussianBlur(5 * SS)))
     return base.convert("RGB").resize(size, Image.LANCZOS)
